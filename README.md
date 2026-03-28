@@ -1,5 +1,9 @@
 # react-native-qdrant-edge
 
+[![npm](https://img.shields.io/npm/v/react-native-qdrant-edge)](https://www.npmjs.com/package/react-native-qdrant-edge)
+[![license](https://img.shields.io/npm/l/react-native-qdrant-edge)](https://github.com/rust-dd/react-native-qdrant-edge/blob/main/LICENSE)
+[![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey)](https://github.com/rust-dd/react-native-qdrant-edge)
+
 Embedded vector search for React Native. Runs the [Qdrant](https://qdrant.tech) search engine **in-process** on the device -- no server, no network, fully offline.
 
 Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) (Rust) with [Nitro Modules](https://nitro.margelo.com) for near-zero JS-native overhead.

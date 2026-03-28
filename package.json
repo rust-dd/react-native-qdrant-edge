@@ -61,14 +61,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/danixx/react-native-qdrant-edge.git"
+    "url": "git+https://github.com/rust-dd/react-native-qdrant-edge.git"
   },
   "author": "danixx",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/danixx/react-native-qdrant-edge/issues"
+    "url": "https://github.com/rust-dd/react-native-qdrant-edge/issues"
   },
-  "homepage": "https://github.com/danixx/react-native-qdrant-edge#readme",
+  "homepage": "https://github.com/rust-dd/react-native-qdrant-edge#readme",
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
