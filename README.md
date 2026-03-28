@@ -218,6 +218,34 @@ function NotesScreen() {
 }
 ```
 
+#### `useUpsert`
+
+```ts
+import { useUpsert } from 'react-native-qdrant-edge'
+
+function AddNote({ shard }) {
+  const { upsert, error } = useUpsert(shard)
+
+  const handleSave = (embedding: number[], text: string) => {
+    upsert([{ id: Date.now(), vector: embedding, payload: { text } }])
+  }
+
+  return <Button onPress={() => handleSave(embedding, 'My note')} title="Save" />
+}
+```
+
+#### `useDelete`
+
+```ts
+import { useDelete } from 'react-native-qdrant-edge'
+
+function NoteItem({ shard, noteId }) {
+  const { deletePoints, error } = useDelete(shard)
+
+  return <Button onPress={() => deletePoints([noteId])} title="Delete" />
+}
+```
+
 #### `useSearch`
 
 ```ts
@@ -240,6 +268,71 @@ function SearchView({ shard, queryEmbedding }) {
 #### `useQuery`
 
 Same as `useSearch` but uses the advanced query API with fusion support.
+
+```ts
+import { useQuery } from 'react-native-qdrant-edge'
+
+const { results, query } = useQuery({
+  shard,
+  request: { vector: embedding, limit: 10, fusion: 'rrf' },
+})
+```
+
+#### `useRetrieve`
+
+```ts
+import { useRetrieve } from 'react-native-qdrant-edge'
+
+function NoteDetail({ shard, noteIds }) {
+  const { points, retrieve } = useRetrieve(shard)
+
+  useEffect(() => {
+    retrieve(noteIds, { withPayload: true, withVector: false })
+  }, [noteIds])
+
+  return points.map(p => <Text key={p.id}>{p.payload?.text}</Text>)
+}
+```
+
+#### `useScroll`
+
+```ts
+import { useScroll } from 'react-native-qdrant-edge'
+
+function AllNotes({ shard }) {
+  const { points, nextOffset, scroll } = useScroll(shard)
+
+  useEffect(() => { scroll({ limit: 50, with_payload: true }) }, [])
+
+  const loadMore = () => {
+    if (nextOffset) scroll({ offset: nextOffset, limit: 50, with_payload: true })
+  }
+
+  return (
+    <FlatList
+      data={points}
+      onEndReached={loadMore}
+      renderItem={({ item }) => <Text>{item.payload?.text}</Text>}
+    />
+  )
+}
+```
+
+#### `useCount`
+
+```ts
+import { useCount } from 'react-native-qdrant-edge'
+
+function Stats({ shard }) {
+  const { count, refresh } = useCount(shard)
+  // count auto-refreshes when shard changes
+
+  // Count with filter:
+  const activeCount = () => refresh({ must: [{ key: 'active', match: { value: true } }] })
+
+  return <Text>{count} points</Text>
+}
+```
 
 #### `useShardInfo`
 
