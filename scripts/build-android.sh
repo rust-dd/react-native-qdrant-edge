@@ -4,6 +4,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUST_DIR="$SCRIPT_DIR/../rust/qdrant-edge-ffi"
 OUT_DIR="$SCRIPT_DIR/../android/src/main/jniLibs"
+HEADER="$SCRIPT_DIR/../cpp/qdrant_edge_ffi.h"
+
+if command -v cbindgen &>/dev/null; then
+  echo "==> Generating C header..."
+  cd "$RUST_DIR"
+  cbindgen --config cbindgen.toml --crate qdrant-edge-ffi --output "$HEADER"
+fi
 
 if [ -z "${ANDROID_NDK_HOME:-}" ]; then
   for candidate in \
