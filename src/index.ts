@@ -152,13 +152,28 @@ export function loadShard(path: string, config?: EdgeConfig): Shard {
   return new Shard(raw)
 }
 
-export { useShard, useSearch, useQuery, useShardInfo } from './hooks'
+export {
+  useShard,
+  useUpsert,
+  useDelete,
+  useSearch,
+  useQuery,
+  useRetrieve,
+  useScroll,
+  useCount,
+  useShardInfo,
+} from './hooks'
 export type {
   UseShardOptions,
   UseShardResult,
+  UseUpsertResult,
+  UseDeleteResult,
   UseSearchOptions,
   UseSearchResult,
   UseQueryOptions,
   UseQueryResult,
+  UseRetrieveResult,
+  UseScrollResult,
+  UseCountResult,
   UseShardInfoResult,
 } from './hooks'

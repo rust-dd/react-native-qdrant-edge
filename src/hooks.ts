@@ -4,8 +4,13 @@ import type { QdrantEdge } from './specs/QdrantEdge.nitro'
 import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
   EdgeConfig,
+  FieldIndexType,
+  Point,
   QueryRequest,
+  RetrievedPoint,
   ScoredPoint,
+  ScrollRequest,
+  ScrollResult,
   SearchRequest,
   ShardInfo,
 } from './types'
@@ -21,7 +26,7 @@ class ShardWrapper {
   close() {
     this._raw.close()
   }
-  upsert(points: any[]) {
+  upsert(points: Point[]) {
     this._raw.upsert(JSON.stringify(points))
   }
   deletePoints(ids: number[]) {
@@ -33,7 +38,7 @@ class ShardWrapper {
   deletePayload(id: number, keys: string[]) {
     this._raw.deletePayload(id, JSON.stringify(keys))
   }
-  createFieldIndex(name: string, type: string) {
+  createFieldIndex(name: string, type: FieldIndexType) {
     this._raw.createFieldIndex(name, type)
   }
   deleteFieldIndex(name: string) {
@@ -48,7 +53,7 @@ class ShardWrapper {
   retrieve(
     ids: number[],
     opts: { withPayload?: boolean; withVector?: boolean } = {}
-  ) {
+  ): RetrievedPoint[] {
     return JSON.parse(
       this._raw.retrieve(
         JSON.stringify(ids),
@@ -57,10 +62,10 @@ class ShardWrapper {
       )
     )
   }
-  scroll(req: any = {}) {
+  scroll(req: ScrollRequest = {}): ScrollResult {
     return JSON.parse(this._raw.scroll(JSON.stringify(req)))
   }
-  count(filter?: Record<string, unknown>) {
+  count(filter?: Record<string, unknown>): number {
     return this._raw.count(filter ? JSON.stringify(filter) : '')
   }
   info(): ShardInfo {
@@ -110,12 +115,8 @@ export function useShard(options: UseShardOptions): UseShardResult {
   const open = useCallback(() => {
     try {
       setError(null)
-      let s: ShardWrapper
-      if (create && config) {
-        s = _createShard(path, config)
-      } else {
-        s = _loadShard(path, config)
-      }
+      const s =
+        create && config ? _createShard(path, config) : _loadShard(path, config)
       shardRef.current = s
       setShard(s)
     } catch (e: any) {
@@ -145,13 +146,61 @@ export function useShard(options: UseShardOptions): UseShardResult {
     }
   }, [])
 
-  return {
-    shard,
-    isOpen: shard !== null,
-    error,
-    open,
-    close,
-  }
+  return { shard, isOpen: shard !== null, error, open, close }
+}
+
+export interface UseUpsertResult {
+  upsert: (points: Point[]) => void
+  error: string | null
+}
+
+export function useUpsert(shard: ShardWrapper | null): UseUpsertResult {
+  const [error, setError] = useState<string | null>(null)
+
+  const upsert = useCallback(
+    (points: Point[]) => {
+      if (!shard) {
+        setError('shard not open')
+        return
+      }
+      try {
+        setError(null)
+        shard.upsert(points)
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+      }
+    },
+    [shard]
+  )
+
+  return { upsert, error }
+}
+
+export interface UseDeleteResult {
+  deletePoints: (ids: number[]) => void
+  error: string | null
+}
+
+export function useDelete(shard: ShardWrapper | null): UseDeleteResult {
+  const [error, setError] = useState<string | null>(null)
+
+  const deletePoints = useCallback(
+    (ids: number[]) => {
+      if (!shard) {
+        setError('shard not open')
+        return
+      }
+      try {
+        setError(null)
+        shard.deletePoints(ids)
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+      }
+    },
+    [shard]
+  )
+
+  return { deletePoints, error }
 }
 
 export interface UseSearchOptions {
@@ -189,9 +238,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
   )
 
   useEffect(() => {
-    if (enabled && shard && request) {
-      search()
-    }
+    if (enabled && shard && request) search()
   }, [enabled, shard, request, search])
 
   return { results, error, search }
@@ -232,12 +279,117 @@ export function useQuery(options: UseQueryOptions): UseQueryResult {
   )
 
   useEffect(() => {
-    if (enabled && shard && request) {
-      query()
-    }
+    if (enabled && shard && request) query()
   }, [enabled, shard, request, query])
 
   return { results, error, query }
+}
+
+export interface UseRetrieveResult {
+  points: RetrievedPoint[]
+  error: string | null
+  retrieve: (
+    ids: number[],
+    opts?: { withPayload?: boolean; withVector?: boolean }
+  ) => RetrievedPoint[]
+}
+
+export function useRetrieve(shard: ShardWrapper | null): UseRetrieveResult {
+  const [points, setPoints] = useState<RetrievedPoint[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  const retrieve = useCallback(
+    (ids: number[], opts?: { withPayload?: boolean; withVector?: boolean }) => {
+      if (!shard) {
+        setError('shard not open')
+        return []
+      }
+      try {
+        setError(null)
+        const r = shard.retrieve(ids, opts)
+        setPoints(r)
+        return r
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+        return []
+      }
+    },
+    [shard]
+  )
+
+  return { points, error, retrieve }
+}
+
+export interface UseScrollResult {
+  points: RetrievedPoint[]
+  nextOffset: string | undefined
+  error: string | null
+  scroll: (request?: ScrollRequest) => ScrollResult
+}
+
+export function useScroll(shard: ShardWrapper | null): UseScrollResult {
+  const [points, setPoints] = useState<RetrievedPoint[]>([])
+  const [nextOffset, setNextOffset] = useState<string | undefined>()
+  const [error, setError] = useState<string | null>(null)
+
+  const scroll = useCallback(
+    (request?: ScrollRequest) => {
+      const empty: ScrollResult = { points: [], next_offset: undefined }
+      if (!shard) {
+        setError('shard not open')
+        return empty
+      }
+      try {
+        setError(null)
+        const r = shard.scroll(request)
+        setPoints(r.points)
+        setNextOffset(r.next_offset)
+        return r
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+        return empty
+      }
+    },
+    [shard]
+  )
+
+  return { points, nextOffset, error, scroll }
+}
+
+export interface UseCountResult {
+  count: number
+  error: string | null
+  refresh: (filter?: Record<string, unknown>) => number
+}
+
+export function useCount(shard: ShardWrapper | null): UseCountResult {
+  const [count, setCount] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(
+    (filter?: Record<string, unknown>) => {
+      if (!shard) {
+        setError('shard not open')
+        return 0
+      }
+      try {
+        setError(null)
+        const c = shard.count(filter)
+        setCount(c)
+        return c
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+        return 0
+      }
+    },
+    [shard]
+  )
+
+  useEffect(() => {
+    if (shard) refresh()
+  }, [shard, refresh])
+
+  return { count, error, refresh }
 }
 
 export interface UseShardInfoResult {

@@ -52,7 +52,7 @@ import { createShard, loadShard } from 'react-native-qdrant-edge'
 
 // Create a new shard
 const shard = createShard('/path/to/shard', {
-  vectors: { '': { size: 384, distance: 'Cosine' } },
+  vectors: { default: { size: 384, distance: 'Cosine' } },
 })
 
 // Insert points
@@ -69,12 +69,14 @@ const results = shard.search({
 })
 // [{ id: '1', score: 0.98, payload: { title: 'Hello' } }, ...]
 
-// Persist and close
+// Persist to disk
 shard.flush()
 shard.close()
 
-// Reload later
+// Reload from disk on next app launch
 const loaded = loadShard('/path/to/shard')
+const count = loaded.count()  // 2
+const info = loaded.info()    // { points_count: 2, segments_count: 1, ... }
 ```
 
 ## API
@@ -200,13 +202,20 @@ shard.createFieldIndex('category', 'keyword')
 ```ts
 import { useShard } from 'react-native-qdrant-edge'
 
-const { shard, isOpen, error, open, close } = useShard({
-  path: '/path/to/shard',
-  config: { vectors: { '': { size: 384, distance: 'Cosine' } } },
-  create: true,  // create if not exists, otherwise loads
-})
+function NotesScreen() {
+  const { shard, isOpen, error, open, close } = useShard({
+    path: `${documentDir}/notes`,
+    config: { vectors: { default: { size: 384, distance: 'Cosine' } } },
+    create: true,  // create new shard, or use false / omit to load existing
+  })
 
-// Automatically closes the shard on unmount
+  useEffect(() => { open() }, [])
+  // Automatically closes the shard on unmount
+
+  if (!isOpen) return <Text>Loading...</Text>
+
+  return <NotesList shard={shard} />
+}
 ```
 
 #### `useSearch`
@@ -214,14 +223,18 @@ const { shard, isOpen, error, open, close } = useShard({
 ```ts
 import { useSearch } from 'react-native-qdrant-edge'
 
-const { results, error, search } = useSearch({
-  shard,
-  request: { vector: queryEmbedding, limit: 10, with_payload: true },
-  enabled: true,  // auto-search when request changes
-})
+function SearchView({ shard, queryEmbedding }) {
+  const { results, error, search } = useSearch({
+    shard,
+    request: { vector: queryEmbedding, limit: 10, with_payload: true },
+    enabled: true,  // auto-search when request changes
+  })
 
-// Or trigger manually:
-search({ vector: newEmbedding, limit: 5 })
+  // Or trigger manually:
+  const handleRefresh = () => search({ vector: newEmbedding, limit: 5 })
+
+  return results.map(r => <ResultCard key={r.id} point={r} />)
+}
 ```
 
 #### `useQuery`
@@ -233,8 +246,54 @@ Same as `useSearch` but uses the advanced query API with fusion support.
 ```ts
 import { useShardInfo } from 'react-native-qdrant-edge'
 
-const { info, refresh } = useShardInfo(shard)
-// info: { points_count: 1000, segments_count: 2, indexed_vectors_count: 1000 }
+function ShardStats({ shard }) {
+  const { info, refresh } = useShardInfo(shard)
+
+  return (
+    <Text>
+      {info?.points_count} points, {info?.segments_count} segments
+    </Text>
+  )
+}
+```
+
+#### Multiple shards with hooks
+
+```ts
+function App() {
+  const notes = useShard({
+    path: `${dataDir}/notes`,
+    config: { vectors: { default: { size: 384, distance: 'Cosine' } } },
+  })
+
+  const photos = useShard({
+    path: `${dataDir}/photos`,
+    config: { vectors: { default: { size: 512, distance: 'Dot' } } },
+  })
+
+  useEffect(() => {
+    notes.open()
+    photos.open()
+  }, [])
+
+  // Search across both
+  const noteResults = useSearch({
+    shard: notes.shard,
+    request: { vector: queryVec384, limit: 5, with_payload: true },
+  })
+
+  const photoResults = useSearch({
+    shard: photos.shard,
+    request: { vector: queryVec512, limit: 10, with_payload: true },
+  })
+
+  return (
+    <>
+      <Section title="Notes" results={noteResults.results} />
+      <Section title="Photos" results={photoResults.results} />
+    </>
+  )
+}
 ```
 
 ### Multiple shards
@@ -242,13 +301,38 @@ const { info, refresh } = useShardInfo(shard)
 Each shard is independent with its own storage, index, and config:
 
 ```ts
-const documents = createShard(docsPath, {
-  vectors: { '': { size: 768, distance: 'Cosine' } },
+import { createShard, loadShard } from 'react-native-qdrant-edge'
+
+// Separate shards for different data types
+const documents = createShard(`${dataDir}/documents`, {
+  vectors: { default: { size: 768, distance: 'Cosine' } },
 })
 
-const images = createShard(imagesPath, {
-  vectors: { '': { size: 512, distance: 'Dot' } },
+const images = createShard(`${dataDir}/images`, {
+  vectors: { default: { size: 512, distance: 'Dot' } },
 })
+
+// Insert into each independently
+documents.upsert([
+  { id: 1, vector: docEmbedding, payload: { title: 'Getting started', category: 'docs' } },
+  { id: 2, vector: docEmbedding2, payload: { title: 'API reference', category: 'docs' } },
+])
+
+images.upsert([
+  { id: 1, vector: imgEmbedding, payload: { filename: 'photo.jpg', album: 'vacation' } },
+])
+
+// Search each shard separately
+const docResults = documents.search({ vector: queryVec768, limit: 5, with_payload: true })
+const imgResults = images.search({ vector: queryVec512, limit: 10, with_payload: true })
+
+// Persist both
+documents.flush()
+images.flush()
+
+// Later, reload from disk
+const docs = loadShard(`${dataDir}/documents`)
+const imgs = loadShard(`${dataDir}/images`)
 ```
 
 ## Building from source

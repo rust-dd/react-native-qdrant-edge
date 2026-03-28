@@ -53,7 +53,7 @@ export default function App() {
       }
 
       const s = createShard(path, {
-        vectors: { '': { size: 4, distance: 'Cosine' } },
+        vectors: { default: { size: 4, distance: 'Cosine' } },
       })
       s.upsert(
         CITIES.map((c) => ({
