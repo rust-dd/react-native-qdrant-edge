@@ -52,7 +52,7 @@ import { createShard, loadShard } from 'react-native-qdrant-edge'
 
 // Create a new shard
 const shard = createShard('/path/to/shard', {
-  vectors: { default: { size: 384, distance: 'Cosine' } },
+  vectors: { '': { size: 384, distance: 'Cosine' } },
 })
 
 // Insert points
@@ -205,7 +205,7 @@ import { useShard } from 'react-native-qdrant-edge'
 function NotesScreen() {
   const { shard, isOpen, error, open, close } = useShard({
     path: `${documentDir}/notes`,
-    config: { vectors: { default: { size: 384, distance: 'Cosine' } } },
+    config: { vectors: { '': { size: 384, distance: 'Cosine' } } },
     create: true,  // create new shard, or use false / omit to load existing
   })
 
@@ -356,12 +356,12 @@ function ShardStats({ shard }) {
 function App() {
   const notes = useShard({
     path: `${dataDir}/notes`,
-    config: { vectors: { default: { size: 384, distance: 'Cosine' } } },
+    config: { vectors: { '': { size: 384, distance: 'Cosine' } } },
   })
 
   const photos = useShard({
     path: `${dataDir}/photos`,
-    config: { vectors: { default: { size: 512, distance: 'Dot' } } },
+    config: { vectors: { '': { size: 512, distance: 'Dot' } } },
   })
 
   useEffect(() => {
@@ -398,11 +398,11 @@ import { createShard, loadShard } from 'react-native-qdrant-edge'
 
 // Separate shards for different data types
 const documents = createShard(`${dataDir}/documents`, {
-  vectors: { default: { size: 768, distance: 'Cosine' } },
+  vectors: { '': { size: 768, distance: 'Cosine' } },
 })
 
 const images = createShard(`${dataDir}/images`, {
-  vectors: { default: { size: 512, distance: 'Dot' } },
+  vectors: { '': { size: 512, distance: 'Dot' } },
 })
 
 // Insert into each independently
