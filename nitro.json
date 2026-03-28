@@ -1,0 +1,32 @@
+{
+  "$schema": "https://nitro.margelo.com/nitro.schema.json",
+  "cxxNamespace": [
+    "qdrantedge"
+  ],
+  "ios": {
+    "iosModuleName": "NitroQdrantEdge"
+  },
+  "android": {
+    "androidNamespace": [
+      "qdrantedge"
+    ],
+    "androidCxxLibName": "NitroQdrantEdge"
+  },
+  "autolinking": {
+    "QdrantEdge": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridQdrantEdge"
+      }
+    },
+    "QdrantEdgeShard": {
+      "all": {
+        "language": "c++",
+        "implementationClassName": "HybridQdrantEdgeShard"
+      }
+    }
+  },
+  "ignorePaths": [
+    "**/node_modules"
+  ]
+}
