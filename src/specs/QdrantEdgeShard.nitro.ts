@@ -6,9 +6,10 @@ import type { HybridObject } from 'react-native-nitro-modules'
  * Complex parameters (points, search requests, filters) are passed as JSON strings
  * for flexibility, and parsed in the Rust layer via serde.
  */
-export interface QdrantEdgeShard
-  extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
-  // ── Lifecycle ──────────────────────────────────────────
+export interface QdrantEdgeShard extends HybridObject<{
+  ios: 'c++'
+  android: 'c++'
+}> {
   /** Flush pending writes to disk. */
   flush(): void
   /** Merge segments, build HNSW indexes, remove deleted data. */
@@ -16,7 +17,6 @@ export interface QdrantEdgeShard
   /** Flush and close this shard. */
   close(): void
 
-  // ── Data operations ────────────────────────────────────
   /**
    * Upsert points into the shard.
    * @param pointsJson - JSON array of points: [{ id, vector, payload? }, ...]
@@ -51,7 +51,6 @@ export interface QdrantEdgeShard
    */
   deleteFieldIndex(fieldName: string): void
 
-  // ── Search & Query ─────────────────────────────────────
   /**
    * Nearest-neighbor search.
    * @param requestJson - JSON SearchRequest: { query, filter?, limit, offset?, with_payload?, with_vector?, score_threshold?, params? }
@@ -65,7 +64,6 @@ export interface QdrantEdgeShard
    */
   query(requestJson: string): string
 
-  // ── Retrieval ──────────────────────────────────────────
   /**
    * Retrieve specific points by IDs.
    * @param idsJson - JSON array of point IDs
@@ -87,7 +85,6 @@ export interface QdrantEdgeShard
    */
   count(filterJson: string): number
 
-  // ── Info ───────────────────────────────────────────────
   /**
    * Get shard info (point count, segments, config, etc.)
    * @returns JSON with shard metadata

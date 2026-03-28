@@ -26,7 +26,6 @@ public:
     }
   }
 
-  // ── Lifecycle ──
   void flush() override {
     ensureOpen();
     qe_shard_flush(_handle);
@@ -45,7 +44,6 @@ public:
     }
   }
 
-  // ── Data operations ──
   void upsert(const std::string& pointsJson) override {
     ensureOpen();
     if (qe_shard_upsert(_handle, pointsJson.c_str()) < 0) {
@@ -88,7 +86,6 @@ public:
     }
   }
 
-  // ── Search & Query ──
   std::string search(const std::string& requestJson) override {
     ensureOpen();
     char* result = qe_shard_search(_handle, requestJson.c_str());
@@ -101,7 +98,6 @@ public:
     return takeString(result);
   }
 
-  // ── Retrieval ──
   std::string retrieve(const std::string& idsJson, bool withPayload, bool withVector) override {
     ensureOpen();
     char* result = qe_shard_retrieve(_handle, idsJson.c_str(), withPayload, withVector);
@@ -121,7 +117,6 @@ public:
     return static_cast<double>(result);
   }
 
-  // ── Info ──
   std::string info() override {
     ensureOpen();
     char* result = qe_shard_info(_handle);

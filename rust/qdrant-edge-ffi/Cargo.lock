@@ -2571,6 +2571,7 @@ name = "qdrant-edge-ffi"
 version = "0.1.0"
 dependencies = [
  "log",
+ "parking_lot",
  "qdrant-edge",
  "serde",
  "serde_json",

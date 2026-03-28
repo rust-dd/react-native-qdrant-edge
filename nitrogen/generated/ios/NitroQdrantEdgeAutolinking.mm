@@ -11,7 +11,6 @@
 #import <type_traits>
 
 #include "HybridQdrantEdge.hpp"
-#include "HybridQdrantEdgeShard.hpp"
 
 @interface NitroQdrantEdgeAutolinking : NSObject
 @end
@@ -29,15 +28,6 @@
                     "The HybridObject \"HybridQdrantEdge\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridQdrantEdge>();
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "QdrantEdgeShard",
-    []() -> std::shared_ptr<HybridObject> {
-      static_assert(std::is_default_constructible_v<HybridQdrantEdgeShard>,
-                    "The HybridObject \"HybridQdrantEdgeShard\" is not default-constructible! "
-                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-      return std::make_shared<HybridQdrantEdgeShard>();
     }
   );
 }

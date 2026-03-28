@@ -11,7 +11,7 @@ buildscript {
 
 def reactNativeArchitectures() {
   def value = rootProject.getProperties().get("reactNativeArchitectures")
-  return value ? value.split(",") : ["armeabi-v7a", "x86", "x86_64", "arm64-v8a"]
+  return value ? value.split(",") : ["x86_64", "arm64-v8a"]
 }
 
 def isNewArchitectureEnabled() {
@@ -129,6 +129,27 @@ repositories {
   google()
 }
 
+tasks.register("buildRustLibs") {
+  def jniLibsDir = file("${projectDir}/src/main/jniLibs")
+  def markerLib = file("${jniLibsDir}/arm64-v8a/libqdrant_edge_ffi.a")
+  def buildScript = file("${projectDir}/../scripts/build-android.sh")
+
+  onlyIf { !markerLib.exists() && buildScript.exists() }
+
+  doLast {
+    logger.lifecycle("[react-native-qdrant-edge] Rust Android libs not found, building...")
+    exec {
+      commandLine "bash", buildScript.absolutePath
+      workingDir projectDir.parentFile
+    }
+  }
+}
+
+tasks.configureEach { task ->
+  if (task.name.startsWith("externalNativeBuild")) {
+    task.dependsOn("buildRustLibs")
+  }
+}
 
 dependencies {
   // For < 0.71, this will be from the local maven repo

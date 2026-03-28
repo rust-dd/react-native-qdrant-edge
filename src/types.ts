@@ -1,7 +1,5 @@
-// ── Distance metrics ─────────────────────────────────────
 export type Distance = 'Cosine' | 'Euclid' | 'Dot' | 'Manhattan'
 
-// ── Config ───────────────────────────────────────────────
 export interface VectorParams {
   size: number
   distance: Distance
@@ -22,7 +20,6 @@ export interface EdgeConfig {
   on_disk_payload?: boolean
 }
 
-// ── Points ───────────────────────────────────────────────
 export interface Point {
   id: number
   vector: number[] | Record<string, number[]>
@@ -43,7 +40,6 @@ export interface RetrievedPoint {
   vector?: number[] | Record<string, unknown>
 }
 
-// ── Search ───────────────────────────────────────────────
 export interface SearchRequest {
   vector: number[]
   using?: string
@@ -55,7 +51,6 @@ export interface SearchRequest {
   score_threshold?: number
 }
 
-// ── Query ────────────────────────────────────────────────
 export interface QueryRequest {
   vector?: number[]
   using?: string
@@ -68,7 +63,6 @@ export interface QueryRequest {
   fusion?: 'rrf' | 'dbsf'
 }
 
-// ── Scroll ───────────────────────────────────────────────
 export interface ScrollRequest {
   offset?: number | string
   limit?: number
@@ -82,7 +76,6 @@ export interface ScrollResult {
   next_offset?: string
 }
 
-// ── Filter ───────────────────────────────────────────────
 export interface Filter {
   must?: Condition[]
   should?: Condition[]
@@ -112,7 +105,6 @@ export interface RangeCondition {
   lte?: number
 }
 
-// ── Field Index ──────────────────────────────────────────
 export type FieldIndexType =
   | 'keyword'
   | 'integer'
@@ -122,7 +114,6 @@ export type FieldIndexType =
   | 'bool'
   | 'datetime'
 
-// ── Shard Info ───────────────────────────────────────────
 export interface ShardInfo {
   segments_count: number
   points_count: number

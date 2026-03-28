@@ -1,58 +1,57 @@
 #!/bin/bash
 set -euo pipefail
 
-# Build qdrant-edge-ffi for Android targets.
-#
-# Requirements:
-#   cargo install cargo-ndk
-#   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android i686-linux-android
-#   ANDROID_NDK_HOME must be set
-
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUST_DIR="$SCRIPT_DIR/../rust/qdrant-edge-ffi"
 OUT_DIR="$SCRIPT_DIR/../android/src/main/jniLibs"
 
-# Android ABI -> Rust target mapping
-declare -A ABI_MAP=(
-  ["arm64-v8a"]="aarch64-linux-android"
-  ["armeabi-v7a"]="armv7-linux-androideabi"
-  ["x86_64"]="x86_64-linux-android"
-  ["x86"]="i686-linux-android"
-)
-
-echo "==> Building qdrant-edge-ffi for Android..."
+if [ -z "${ANDROID_NDK_HOME:-}" ]; then
+  for candidate in \
+    "$HOME/Library/Android/sdk/ndk"/*/ \
+    "$HOME/Android/Sdk/ndk"/*/ \
+    "${ANDROID_HOME:-/nonexistent}/ndk"/*/ \
+    "${ANDROID_SDK_ROOT:-/nonexistent}/ndk"/*/; do
+    if [ -d "$candidate" ]; then
+      ANDROID_NDK_HOME="${candidate%/}"
+      break
+    fi
+  done
+fi
 
 if [ -z "${ANDROID_NDK_HOME:-}" ]; then
-  echo "ERROR: ANDROID_NDK_HOME is not set"
+  echo "ERROR: Cannot find Android NDK. Set ANDROID_NDK_HOME or install NDK via Android Studio."
   exit 1
 fi
 
-# Ensure cargo-ndk is installed
+export ANDROID_NDK_HOME
+echo "==> Using NDK: $ANDROID_NDK_HOME"
+echo "==> Building qdrant-edge-ffi for Android..."
+
 if ! command -v cargo-ndk &>/dev/null; then
   echo "  -> Installing cargo-ndk..."
   cargo install cargo-ndk
 fi
 
-# Ensure targets are installed
-for target in "${ABI_MAP[@]}"; do
+TARGETS="aarch64-linux-android x86_64-linux-android"
+
+for target in $TARGETS; do
   rustup target add "$target" 2>/dev/null || true
 done
 
-# Build for each ABI
-for abi in "${!ABI_MAP[@]}"; do
-  target="${ABI_MAP[$abi]}"
+build_abi() {
+  local abi=$1
+  local target=$2
   echo "  -> Building $abi ($target)..."
+  cd "$RUST_DIR"
   cargo ndk \
-    --manifest-path "$RUST_DIR/Cargo.toml" \
     --target "$target" \
     --platform 24 \
     -- build --release
-
   mkdir -p "$OUT_DIR/$abi"
   cp "$RUST_DIR/target/$target/release/libqdrant_edge_ffi.a" "$OUT_DIR/$abi/"
-done
+}
+
+build_abi "arm64-v8a" "aarch64-linux-android"
+build_abi "x86_64" "x86_64-linux-android"
 
 echo "==> Android build complete!"
-for abi in "${!ABI_MAP[@]}"; do
-  echo "    $abi: $OUT_DIR/$abi/libqdrant_edge_ffi.a"
-done

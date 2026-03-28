@@ -9,33 +9,23 @@ use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 use qdrant_edge::external::serde_json;
 use qdrant_edge::{
-    CountRequest, EdgeConfig, EdgeShard, Filter, PointStruct,
-    ScrollRequest, UpdateOperation, Vector, Vectors,
+    CountRequest, EdgeConfig, EdgeShard, Filter, PointStruct, ScrollRequest, UpdateOperation,
+    Vector, Vectors,
 };
 use serde::{Deserialize, Serialize};
-
-// ---------------------------------------------------------------------------
-// Opaque handle
-// ---------------------------------------------------------------------------
 
 /// Opaque handle to an EdgeShard, protected by a Mutex for thread safety.
 pub struct QeShardHandle {
     shard: Mutex<Option<EdgeShard>>,
 }
 
-// ---------------------------------------------------------------------------
-// Helper: C string conversions
-// ---------------------------------------------------------------------------
-
 unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
     assert!(!ptr.is_null());
-    unsafe { CStr::from_ptr(ptr) }
-        .to_str()
-        .unwrap_or_default()
+    unsafe { CStr::from_ptr(ptr) }.to_str().unwrap_or_default()
 }
 
 fn string_to_c(s: String) -> *mut c_char {
@@ -46,10 +36,6 @@ fn error_json(msg: &str) -> *mut c_char {
     let err = serde_json::json!({ "error": msg });
     string_to_c(err.to_string())
 }
-
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
 
 /// Create a new shard. `config_json` is a JSON-serialized EdgeConfig.
 /// Returns an opaque handle, or null on error (check `qe_last_error`).
@@ -120,9 +106,7 @@ pub unsafe extern "C" fn qe_shard_close(handle: *mut QeShardHandle) {
     }
     let boxed = unsafe { Box::from_raw(handle) };
     // Take the shard out and drop it (which flushes)
-    if let Ok(mut guard) = boxed.shard.lock() {
-        guard.take();
-    }
+    boxed.shard.lock().take();
 }
 
 /// Flush pending writes to disk.
@@ -145,10 +129,6 @@ pub unsafe extern "C" fn qe_shard_optimize(handle: *mut QeShardHandle) -> i32 {
     });
     result
 }
-
-// ---------------------------------------------------------------------------
-// Data operations
-// ---------------------------------------------------------------------------
 
 /// Upsert points. `points_json` is a JSON array of PointInput objects.
 /// Returns 0 on success, -1 on error.
@@ -179,11 +159,9 @@ pub unsafe extern "C" fn qe_shard_upsert(
     };
 
     let persisted: Vec<_> = point_structs.into_iter().map(|p| p.into()).collect();
-    let op = UpdateOperation::PointOperation(
-        qdrant_edge::PointOperations::UpsertPoints(
-            qdrant_edge::PointInsertOperations::PointsList(persisted),
-        ),
-    );
+    let op = UpdateOperation::PointOperation(qdrant_edge::PointOperations::UpsertPoints(
+        qdrant_edge::PointInsertOperations::PointsList(persisted),
+    ));
 
     let mut result = -1i32;
     with_shard(handle, |shard| match shard.update(op) {
@@ -329,25 +307,33 @@ pub unsafe extern "C" fn qe_shard_create_field_index(
     };
 
     let schema = match type_str {
-        "keyword" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Keyword),
-        "integer" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Integer),
-        "float" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Float),
+        "keyword" => {
+            qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Keyword)
+        }
+        "integer" => {
+            qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Integer)
+        }
+        "float" => {
+            qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Float)
+        }
         "geo" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Geo),
         "text" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Text),
         "bool" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Bool),
-        "datetime" => qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Datetime),
+        "datetime" => {
+            qdrant_edge::PayloadFieldSchema::FieldType(qdrant_edge::PayloadSchemaType::Datetime)
+        }
         other => {
             set_last_error(format!("Unknown field type: {other}"));
             return -1;
         }
     };
 
-    let op = UpdateOperation::FieldIndexOperation(
-        qdrant_edge::FieldIndexOperations::CreateIndex(qdrant_edge::CreateIndex {
+    let op = UpdateOperation::FieldIndexOperation(qdrant_edge::FieldIndexOperations::CreateIndex(
+        qdrant_edge::CreateIndex {
             field_name: field_path,
             field_schema: Some(schema),
-        }),
-    );
+        },
+    ));
 
     let mut result = -1i32;
     with_shard(handle, |shard| match shard.update(op) {
@@ -372,9 +358,9 @@ pub unsafe extern "C" fn qe_shard_delete_field_index(
             return -1;
         }
     };
-    let op = UpdateOperation::FieldIndexOperation(
-        qdrant_edge::FieldIndexOperations::DeleteIndex(delete_path),
-    );
+    let op = UpdateOperation::FieldIndexOperation(qdrant_edge::FieldIndexOperations::DeleteIndex(
+        delete_path,
+    ));
 
     let mut result = -1i32;
     with_shard(handle, |shard| match shard.update(op) {
@@ -383,10 +369,6 @@ pub unsafe extern "C" fn qe_shard_delete_field_index(
     });
     result
 }
-
-// ---------------------------------------------------------------------------
-// Search & Query
-// ---------------------------------------------------------------------------
 
 /// Search for nearest neighbors. Returns JSON string with results.
 /// The caller must free the returned string with `qe_free_string`.
@@ -454,10 +436,6 @@ pub unsafe extern "C" fn qe_shard_query(
     });
     result_ptr
 }
-
-// ---------------------------------------------------------------------------
-// Retrieval
-// ---------------------------------------------------------------------------
 
 /// Retrieve specific points by IDs. Returns JSON string.
 #[unsafe(no_mangle)]
@@ -539,7 +517,10 @@ pub unsafe extern "C" fn qe_shard_count(
         }
     };
 
-    let req = CountRequest { filter, exact: true };
+    let req = CountRequest {
+        filter,
+        exact: true,
+    };
 
     let mut result = -1i64;
     with_shard(handle, |shard| match shard.count(req) {
@@ -565,10 +546,6 @@ pub unsafe extern "C" fn qe_shard_info(handle: *mut QeShardHandle) -> *mut c_cha
     result_ptr
 }
 
-// ---------------------------------------------------------------------------
-// Memory management
-// ---------------------------------------------------------------------------
-
 /// Free a string returned by any qe_ function.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_free_string(ptr: *mut c_char) {
@@ -580,26 +557,19 @@ pub unsafe extern "C" fn qe_free_string(ptr: *mut c_char) {
 /// Get the last error message. Returns null if no error. Caller must free with qe_free_string.
 #[unsafe(no_mangle)]
 pub extern "C" fn qe_last_error() -> *mut c_char {
-    LAST_ERROR.with(|e| {
-        let mut err = e.lock().unwrap();
-        match err.take() {
-            Some(msg) => string_to_c(msg),
-            None => std::ptr::null_mut(),
-        }
+    LAST_ERROR.with(|e| match e.borrow_mut().take() {
+        Some(msg) => string_to_c(msg),
+        None => std::ptr::null_mut(),
     })
 }
 
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
 thread_local! {
-    static LAST_ERROR: Mutex<Option<String>> = Mutex::new(None);
+    static LAST_ERROR: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
 }
 
 fn set_last_error(msg: String) {
     LAST_ERROR.with(|e| {
-        *e.lock().unwrap() = Some(msg);
+        *e.borrow_mut() = Some(msg);
     });
 }
 
@@ -609,20 +579,13 @@ fn with_shard(handle: *mut QeShardHandle, f: impl FnOnce(&EdgeShard)) {
         return;
     }
     let h = unsafe { &*handle };
-    if let Ok(guard) = h.shard.lock() {
-        if let Some(shard) = guard.as_ref() {
-            f(shard);
-        } else {
-            set_last_error("shard is closed".to_string());
-        }
+    let guard = h.shard.lock();
+    if let Some(shard) = guard.as_ref() {
+        f(shard);
     } else {
-        set_last_error("shard lock poisoned".to_string());
+        set_last_error("shard is closed".to_string());
     }
 }
-
-// ---------------------------------------------------------------------------
-// Input/Output types (serde-compatible wrappers)
-// ---------------------------------------------------------------------------
 
 /// JSON-deserializable point input.
 #[derive(Deserialize)]
@@ -649,7 +612,9 @@ impl PointInput {
                 Vectors::new_named(map.into_iter().map(|(k, v)| (k, Vector::new_dense(v))))
             }
         };
-        let payload = self.payload.unwrap_or(serde_json::Value::Object(Default::default()));
+        let payload = self
+            .payload
+            .unwrap_or(serde_json::Value::Object(Default::default()));
         Ok(PointStruct::new(self.id, vectors, payload))
     }
 }
@@ -821,7 +786,9 @@ impl From<qdrant_edge::ScoredPoint> for ScoredPointOutput {
             id: format!("{}", sp.id),
             score: sp.score,
             version: sp.version,
-            payload: sp.payload.map(|p| serde_json::to_value(p).unwrap_or_default()),
+            payload: sp
+                .payload
+                .map(|p| serde_json::to_value(p).unwrap_or_default()),
             vector: sp.vector.map(vector_struct_to_json),
         }
     }
@@ -841,7 +808,9 @@ impl From<qdrant_edge::Record> for RecordOutput {
     fn from(r: qdrant_edge::Record) -> Self {
         RecordOutput {
             id: format!("{}", r.id),
-            payload: r.payload.map(|p| serde_json::to_value(p).unwrap_or_default()),
+            payload: r
+                .payload
+                .map(|p| serde_json::to_value(p).unwrap_or_default()),
             vector: r.vector.map(vector_struct_to_json),
         }
     }

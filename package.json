@@ -23,8 +23,11 @@
     "ios/**/*.mm",
     "ios/**/*.cpp",
     "ios/**/*.swift",
+    "ios/Libs/qdrant_edge_ffi.xcframework",
+    "android/src/main/jniLibs",
     "rust",
     "scripts",
+    "app.plugin.js",
     "nitro.json",
     "*.podspec",
     "README.md"
@@ -35,7 +38,14 @@
     "lint": "eslint \"**/*.{js,ts,tsx}\" --fix",
     "lint-ci": "eslint \"**/*.{js,ts,tsx}\" -f @jamesacarr/github-actions",
     "typescript": "tsc",
-    "specs": "tsc --noEmit false && nitrogen --logLevel=\"debug\""
+    "specs": "tsc --noEmit false && nitrogen --logLevel=\"debug\"",
+    "rust:build:ios": "bash scripts/build-ios.sh",
+    "rust:build:android": "bash scripts/build-android.sh",
+    "rust:build": "npm run rust:build:ios && npm run rust:build:android",
+    "dev:ios": "node scripts/dev.js ios",
+    "dev:android": "node scripts/dev.js android",
+    "prepack": "node scripts/prepack.js",
+    "postinstall": "node scripts/postinstall.js"
   },
   "keywords": [
     "react-native",
@@ -51,7 +61,7 @@
     "url": "git+https://github.com/danixx/react-native-qdrant-edge.git"
   },
   "author": "danixx",
-  "license": "Apache-2.0",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/danixx/react-native-qdrant-edge/issues"
   },
@@ -60,6 +70,7 @@
     "registry": "https://registry.npmjs.org/"
   },
   "devDependencies": {
+    "@expo/config-plugins": "^55.0.8-canary-20260328-bdc6273",
     "@react-native/eslint-config": "0.83.0",
     "@types/react": "^19.1.03",
     "eslint": "^8.57.0",

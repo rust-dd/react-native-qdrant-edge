@@ -16,7 +16,6 @@
 #include <NitroModules/HybridObjectRegistry.hpp>
 
 #include "HybridQdrantEdge.hpp"
-#include "HybridQdrantEdgeShard.hpp"
 
 namespace margelo::nitro::qdrantedge {
 
@@ -43,15 +42,6 @@ void registerAllNatives() {
                     "The HybridObject \"HybridQdrantEdge\" is not default-constructible! "
                     "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
       return std::make_shared<HybridQdrantEdge>();
-    }
-  );
-  HybridObjectRegistry::registerHybridObjectConstructor(
-    "QdrantEdgeShard",
-    []() -> std::shared_ptr<HybridObject> {
-      static_assert(std::is_default_constructible_v<HybridQdrantEdgeShard>,
-                    "The HybridObject \"HybridQdrantEdgeShard\" is not default-constructible! "
-                    "Create a public constructor that takes zero arguments to be able to autolink this HybridObject.");
-      return std::make_shared<HybridQdrantEdgeShard>();
     }
   );
 }

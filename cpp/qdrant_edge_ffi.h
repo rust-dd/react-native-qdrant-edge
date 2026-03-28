@@ -11,8 +11,6 @@ extern "C" {
 /* Opaque handle to an EdgeShard, protected by a Mutex for thread safety. */
 typedef struct QeShardHandle QeShardHandle;
 
-/* ── Lifecycle ─────────────────────────────────────────── */
-
 /* Create a new shard. config_json is a JSON-serialized EdgeConfig.
    Returns an opaque handle, or null on error (check qe_last_error). */
 QeShardHandle* qe_shard_create(const char* path, const char* config_json);
@@ -28,8 +26,6 @@ void qe_shard_flush(QeShardHandle* handle);
 
 /* Run optimizers. Returns 1 if optimized, 0 if already optimal, -1 on error. */
 int32_t qe_shard_optimize(QeShardHandle* handle);
-
-/* ── Data operations ───────────────────────────────────── */
 
 /* Upsert points. points_json is a JSON array of points. Returns 0 or -1. */
 int32_t qe_shard_upsert(QeShardHandle* handle, const char* points_json);
@@ -49,15 +45,11 @@ int32_t qe_shard_create_field_index(QeShardHandle* handle, const char* field_nam
 /* Delete a field index. Returns 0 or -1. */
 int32_t qe_shard_delete_field_index(QeShardHandle* handle, const char* field_name);
 
-/* ── Search & Query ────────────────────────────────────── */
-
 /* Search for nearest neighbors. Returns JSON string. Free with qe_free_string. */
 char* qe_shard_search(QeShardHandle* handle, const char* request_json);
 
 /* Full query with prefetches and fusion. Returns JSON string. Free with qe_free_string. */
 char* qe_shard_query(QeShardHandle* handle, const char* request_json);
-
-/* ── Retrieval ─────────────────────────────────────────── */
 
 /* Retrieve specific points by IDs. Returns JSON string. Free with qe_free_string. */
 char* qe_shard_retrieve(QeShardHandle* handle, const char* ids_json, bool with_payload, bool with_vector);
@@ -68,12 +60,8 @@ char* qe_shard_scroll(QeShardHandle* handle, const char* request_json);
 /* Count points with optional filter. Returns count or -1 on error. */
 int64_t qe_shard_count(QeShardHandle* handle, const char* filter_json);
 
-/* ── Info ──────────────────────────────────────────────── */
-
 /* Get shard info. Returns JSON string. Free with qe_free_string. */
 char* qe_shard_info(QeShardHandle* handle);
-
-/* ── Memory management ─────────────────────────────────── */
 
 /* Free a string returned by any qe_ function. */
 void qe_free_string(char* ptr);

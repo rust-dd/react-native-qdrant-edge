@@ -4,8 +4,10 @@ import type { QdrantEdgeShard } from './QdrantEdgeShard.nitro'
 /**
  * Factory for creating and loading Qdrant Edge shards.
  */
-export interface QdrantEdge
-  extends HybridObject<{ ios: 'c++'; android: 'c++' }> {
+export interface QdrantEdge extends HybridObject<{
+  ios: 'c++'
+  android: 'c++'
+}> {
   /**
    * Create a new shard on disk.
    * @param path - Filesystem path where the shard will be stored

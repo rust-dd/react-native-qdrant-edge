@@ -33,13 +33,9 @@ export type {
   VectorParams,
 } from './types'
 
-// ── Typed shard wrapper ──────────────────────────────────
-
 export class Shard {
   /** @internal */
   constructor(private readonly _raw: QdrantEdgeShard) {}
-
-  // ── Lifecycle ──
 
   flush(): void {
     this._raw.flush()
@@ -52,8 +48,6 @@ export class Shard {
   close(): void {
     this._raw.close()
   }
-
-  // ── Data ──
 
   upsert(points: Point[]): void {
     this._raw.upsert(JSON.stringify(points))
@@ -79,8 +73,6 @@ export class Shard {
     this._raw.deleteFieldIndex(fieldName)
   }
 
-  // ── Search & Query ──
-
   search(request: SearchRequest): ScoredPoint[] {
     const json = this._raw.search(JSON.stringify(request))
     return JSON.parse(json) as ScoredPoint[]
@@ -90,8 +82,6 @@ export class Shard {
     const json = this._raw.query(JSON.stringify(request))
     return JSON.parse(json) as ScoredPoint[]
   }
-
-  // ── Retrieval ──
 
   retrieve(
     ids: number[],
@@ -114,15 +104,11 @@ export class Shard {
     return this._raw.count(filter ? JSON.stringify(filter) : '')
   }
 
-  // ── Info ──
-
   info(): ShardInfo {
     const json = this._raw.info()
     return JSON.parse(json) as ShardInfo
   }
 }
-
-// ── Main API ─────────────────────────────────────────────
 
 const _factory = NitroModules.createHybridObject<QdrantEdge>('QdrantEdge')
 
@@ -162,9 +148,17 @@ export function createShard(path: string, config: EdgeConfig): Shard {
  * @param config - Optional config override. If omitted, uses the stored config.
  */
 export function loadShard(path: string, config?: EdgeConfig): Shard {
-  const raw = _factory.loadShard(
-    path,
-    config ? JSON.stringify(config) : ''
-  )
+  const raw = _factory.loadShard(path, config ? JSON.stringify(config) : '')
   return new Shard(raw)
 }
+
+export { useShard, useSearch, useQuery, useShardInfo } from './hooks'
+export type {
+  UseShardOptions,
+  UseShardResult,
+  UseSearchOptions,
+  UseSearchResult,
+  UseQueryOptions,
+  UseQueryResult,
+  UseShardInfoResult,
+} from './hooks'

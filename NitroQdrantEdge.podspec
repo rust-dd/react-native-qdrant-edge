@@ -14,31 +14,20 @@ Pod::Spec.new do |s|
   s.source       = { :git => package["repository"]["url"], :tag => "#{s.version}" }
 
   s.source_files = [
-    # Implementation (Swift)
     "ios/**/*.{swift}",
-    # Autolinking/Registration (Objective-C++)
     "ios/**/*.{m,mm}",
-    # Implementation (C++ objects)
     "cpp/**/*.{hpp,cpp,h}",
   ]
 
-  # Rust static libraries
-  s.preserve_paths = "ios/Libs/**"
-  s.vendored_libraries = "ios/Libs/libqdrant_edge_ffi-ios.a"
+  s.vendored_frameworks = "ios/Libs/qdrant_edge_ffi.xcframework"
 
-  # Simulator uses a different fat lib
   s.pod_target_xcconfig = {
-    "OTHER_LDFLAGS[config=Debug][sdk=iphonesimulator*]" => "-force_load $(PODS_TARGET_SRCROOT)/ios/Libs/libqdrant_edge_ffi-ios-sim.a",
-    "OTHER_LDFLAGS[config=Debug][sdk=iphoneos*]" => "-force_load $(PODS_TARGET_SRCROOT)/ios/Libs/libqdrant_edge_ffi-ios.a",
-    "OTHER_LDFLAGS[config=Release][sdk=iphonesimulator*]" => "-force_load $(PODS_TARGET_SRCROOT)/ios/Libs/libqdrant_edge_ffi-ios-sim.a",
-    "OTHER_LDFLAGS[config=Release][sdk=iphoneos*]" => "-force_load $(PODS_TARGET_SRCROOT)/ios/Libs/libqdrant_edge_ffi-ios.a",
     "HEADER_SEARCH_PATHS" => "$(PODS_TARGET_SRCROOT)/cpp",
   }
 
-  # Build Rust libs automatically if not present
   s.script_phase = {
     :name => "Build Rust Library",
-    :script => 'if [ ! -f "${PODS_TARGET_SRCROOT}/ios/Libs/libqdrant_edge_ffi-ios.a" ]; then echo "Building Rust library for iOS..."; bash "${PODS_TARGET_SRCROOT}/scripts/build-ios.sh"; fi',
+    :script => 'if [ ! -d "${PODS_TARGET_SRCROOT}/ios/Libs/qdrant_edge_ffi.xcframework" ]; then bash "${PODS_TARGET_SRCROOT}/scripts/build-ios.sh"; fi',
     :execution_position => :before_compile,
   }
 

@@ -39,6 +39,17 @@ lipo -create \
   "$RUST_DIR/target/x86_64-apple-ios/release/libqdrant_edge_ffi.a" \
   -output "$OUT_DIR/libqdrant_edge_ffi-ios-sim.a"
 
+echo "  -> Creating xcframework..."
+rm -rf "$OUT_DIR/qdrant_edge_ffi.xcframework"
+TMPDIR=$(mktemp -d)
+cp "$OUT_DIR/libqdrant_edge_ffi-ios.a" "$TMPDIR/libqdrant_edge_ffi.a"
+mkdir -p "$TMPDIR/sim"
+cp "$OUT_DIR/libqdrant_edge_ffi-ios-sim.a" "$TMPDIR/sim/libqdrant_edge_ffi.a"
+xcodebuild -create-xcframework \
+  -library "$TMPDIR/libqdrant_edge_ffi.a" \
+  -library "$TMPDIR/sim/libqdrant_edge_ffi.a" \
+  -output "$OUT_DIR/qdrant_edge_ffi.xcframework"
+rm -rf "$TMPDIR"
+
 echo "==> iOS build complete!"
-echo "    Device:    $OUT_DIR/libqdrant_edge_ffi-ios.a"
-echo "    Simulator: $OUT_DIR/libqdrant_edge_ffi-ios-sim.a"
+echo "    $OUT_DIR/qdrant_edge_ffi.xcframework"
