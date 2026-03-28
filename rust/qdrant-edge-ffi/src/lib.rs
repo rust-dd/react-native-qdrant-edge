@@ -5,11 +5,11 @@
 //! them to the actual qdrant-edge types (since many core types like
 //! SearchRequest/QueryRequest don't implement Deserialize).
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 use std::path::Path;
-use parking_lot::Mutex;
 
 use qdrant_edge::external::serde_json;
 use qdrant_edge::{
