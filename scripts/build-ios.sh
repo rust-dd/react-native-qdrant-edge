@@ -46,6 +46,10 @@ lipo -create \
   "$RUST_DIR/target/x86_64-apple-ios/release/libqdrant_edge_ffi.a" \
   -output "$OUT_DIR/libqdrant_edge_ffi-ios-sim.a"
 
+echo "  -> Stripping debug symbols..."
+strip -S "$OUT_DIR/libqdrant_edge_ffi-ios.a"
+strip -S "$OUT_DIR/libqdrant_edge_ffi-ios-sim.a"
+
 echo "  -> Creating xcframework..."
 rm -rf "$OUT_DIR/qdrant_edge_ffi.xcframework"
 TMPDIR=$(mktemp -d)

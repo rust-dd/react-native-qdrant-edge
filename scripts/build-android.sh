@@ -61,4 +61,8 @@ build_abi() {
 build_abi "arm64-v8a" "aarch64-linux-android"
 build_abi "x86_64" "x86_64-linux-android"
 
+echo "  -> Stripping debug symbols..."
+strip -S "$OUT_DIR/arm64-v8a/libqdrant_edge_ffi.a" 2>/dev/null || true
+strip -S "$OUT_DIR/x86_64/libqdrant_edge_ffi.a" 2>/dev/null || true
+
 echo "==> Android build complete!"
