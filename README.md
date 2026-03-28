@@ -463,6 +463,13 @@ TypeScript API
 
 All search operations are synchronous and run on the JS thread via JSI -- no bridge, no serialization overhead for the call itself. Vector data is passed as JSON strings across the FFI boundary and deserialized in Rust.
 
+## Future work
+
+- **ArrayBuffer for vectors** -- pass vector data as raw `Float32Array` / `ArrayBuffer` instead of JSON strings across the FFI boundary. JSON parse overhead is negligible for search (HNSW lookup dominates), but matters for bulk upsert (1000+ points). Hybrid approach: ArrayBuffer for vectors, JSON for metadata (filter, payload, config).
+- **Async operations** -- offload heavy operations (optimize, bulk upsert) to a background thread via Nitro async methods.
+- **Snapshot import/export** -- expose `EdgeShard` snapshot API for syncing with server Qdrant.
+- **Named vector search helpers** -- typed API for multi-vector search (e.g. search text vectors and image vectors separately).
+
 ## License
 
 MIT
