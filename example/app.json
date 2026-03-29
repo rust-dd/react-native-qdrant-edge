@@ -7,13 +7,15 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "qdrantedge",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#fafafa"
     },
     "plugins": [
-      "react-native-qdrant-edge"
+      "react-native-qdrant-edge",
+      "expo-router"
     ],
     "ios": {
       "supportsTablet": true,
