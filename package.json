@@ -1,6 +1,6 @@
 {
   "name": "react-native-qdrant-edge",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Embedded vector search for React Native powered by Qdrant Edge",
   "main": "lib/index",
   "module": "lib/index",
