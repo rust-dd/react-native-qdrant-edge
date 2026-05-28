@@ -105,10 +105,28 @@ export type AnyVector = DenseVector | SparseVector | MultiVector
  */
 export type VectorInput = AnyVector | Record<string, AnyVector>
 
+/** Point identifier: a u64 number or a UUID string. */
+export type PointId = number | string
+
 export interface Point {
-  id: number
+  id: PointId
   vector: VectorInput
   payload?: Record<string, unknown>
+}
+
+export interface SetPayloadOp {
+  payload: Record<string, unknown>
+  /** Apply to these points (and/or to those matching `filter`). */
+  points?: PointId[]
+  filter?: Filter
+  /** Optional nested JSON path. */
+  key?: string
+}
+
+export interface DeletePayloadOp {
+  keys: string[]
+  points?: PointId[]
+  filter?: Filter
 }
 
 /** Vector shape in a result. Sparse comes back as `{ indices, values }` only

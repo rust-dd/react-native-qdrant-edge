@@ -2,8 +2,8 @@
 
 use std::os::raw::c_char;
 
-use qdrant_edge::UpdateOperation;
 use qdrant_edge::external::serde_json;
+use qdrant_edge::{PointId, UpdateOperation};
 
 use crate::error::set_last_error;
 use crate::ffi_strings::cstr_to_str;
@@ -51,15 +51,15 @@ pub unsafe extern "C" fn qe_shard_upsert(
     result
 }
 
-/// Delete points by IDs. `ids_json` is a JSON array of u64 IDs.
-/// Returns 0 on success, -1 on error.
+/// Delete points by IDs. `ids_json` is a JSON array; each element is a u64 or
+/// a UUID string. Returns 0 on success, -1 on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_shard_delete_points(
     handle: *mut QeShardHandle,
     ids_json: *const c_char,
 ) -> i32 {
     let json_str = unsafe { cstr_to_str(ids_json) };
-    let ids: Vec<u64> = match serde_json::from_str(json_str) {
+    let ids: Vec<PointId> = match serde_json::from_str(json_str) {
         Ok(i) => i,
         Err(e) => {
             set_last_error(format!("Failed to parse IDs: {e}"));
@@ -67,10 +67,7 @@ pub unsafe extern "C" fn qe_shard_delete_points(
         }
     };
 
-    let point_ids = ids.into_iter().map(qdrant_edge::PointId::from).collect();
-    let op = UpdateOperation::PointOperation(qdrant_edge::PointOperations::DeletePoints {
-        ids: point_ids,
-    });
+    let op = UpdateOperation::PointOperation(qdrant_edge::PointOperations::DeletePoints { ids });
 
     let mut result = -1i32;
     with_shard(handle, |shard| match shard.update(op) {

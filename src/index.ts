@@ -4,19 +4,23 @@ import type { QdrantEdgeBm25 } from './specs/QdrantEdgeBm25.nitro'
 import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
   Bm25Config,
+  DeletePayloadOp,
   EdgeConfig,
   FacetRequest,
   FacetResponse,
+  Filter,
   FieldIndexType,
   HnswConfig,
   OptimizersConfig,
   Point,
+  PointId,
   QueryRequest,
   RetrievedPoint,
   ScoredPoint,
   ScrollRequest,
   ScrollResult,
   SearchRequest,
+  SetPayloadOp,
   ShardInfo,
   SnapshotManifest,
   SparseVector,
@@ -41,6 +45,7 @@ export type {
   FieldIndexType,
   Filter,
   ContextClause,
+  DeletePayloadOp,
   DiscoverClause,
   Fusion,
   FusionClause,
@@ -50,9 +55,11 @@ export type {
   MultiVectorConfig,
   OptimizersConfig,
   OrderByClause,
+  PointId,
   QuantizationConfig,
   RecommendClause,
   SampleClause,
+  SetPayloadOp,
   WalOptions,
   MultiVector,
   Point,
@@ -95,16 +102,43 @@ export class Shard {
     this._raw.upsert(JSON.stringify(points))
   }
 
-  deletePoints(ids: number[]): void {
+  deletePoints(ids: PointId[]): void {
     this._raw.deletePoints(JSON.stringify(ids))
   }
 
-  setPayload(pointId: number, payload: Record<string, unknown>): void {
-    this._raw.setPayload(pointId, JSON.stringify(payload))
+  /** Merge payload into one or more points (by `pointId` or filter — see `setPayloadOp`). */
+  setPayload(pointId: PointId, payload: Record<string, unknown>, key?: string): void {
+    this._raw.setPayload(JSON.stringify({ payload, points: [pointId], key }))
   }
 
-  deletePayload(pointId: number, keys: string[]): void {
-    this._raw.deletePayload(pointId, JSON.stringify(keys))
+  /** Full-power set: targets by `points` and/or `filter`. */
+  setPayloadOp(op: SetPayloadOp): void {
+    this._raw.setPayload(JSON.stringify(op))
+  }
+
+  /** Overwrite payload on one point (entire payload replaced). */
+  overwritePayload(pointId: PointId, payload: Record<string, unknown>): void {
+    this._raw.overwritePayload(JSON.stringify({ payload, points: [pointId] }))
+  }
+
+  /** Full-power overwrite: targets by `points` and/or `filter`. */
+  overwritePayloadOp(op: SetPayloadOp): void {
+    this._raw.overwritePayload(JSON.stringify(op))
+  }
+
+  /** Delete one point's payload keys. */
+  deletePayload(pointId: PointId, keys: string[]): void {
+    this._raw.deletePayload(JSON.stringify({ keys, points: [pointId] }))
+  }
+
+  /** Full-power delete: targets by `points` and/or `filter`. */
+  deletePayloadOp(op: DeletePayloadOp): void {
+    this._raw.deletePayload(JSON.stringify(op))
+  }
+
+  /** Clear all payload from a set of points or those matching a filter. */
+  clearPayload(target: { points: PointId[] } | { filter: Filter }): void {
+    this._raw.clearPayload(JSON.stringify(target))
   }
 
   createFieldIndex(fieldName: string, fieldType: FieldIndexType): void {
@@ -126,7 +160,7 @@ export class Shard {
   }
 
   retrieve(
-    ids: number[],
+    ids: PointId[],
     options: { withPayload?: boolean; withVector?: boolean } = {}
   ): RetrievedPoint[] {
     const json = this._raw.retrieve(

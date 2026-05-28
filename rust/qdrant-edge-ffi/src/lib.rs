@@ -37,7 +37,10 @@ pub use info::qe_shard_info;
 pub use lifecycle::{
     qe_shard_close, qe_shard_create, qe_shard_flush, qe_shard_load, qe_shard_optimize,
 };
-pub use payload::{qe_shard_delete_payload, qe_shard_set_payload};
+pub use payload::{
+    qe_shard_clear_payload, qe_shard_delete_payload, qe_shard_overwrite_payload,
+    qe_shard_set_payload,
+};
 pub use points::{qe_shard_delete_points, qe_shard_upsert};
 pub use retrieve_scroll::{qe_shard_count, qe_shard_retrieve, qe_shard_scroll};
 pub use search_query::{qe_shard_query, qe_shard_search};

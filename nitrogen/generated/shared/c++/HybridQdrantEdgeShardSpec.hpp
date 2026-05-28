@@ -53,8 +53,10 @@ namespace margelo::nitro::qdrantedge {
       virtual void close() = 0;
       virtual void upsert(const std::string& pointsJson) = 0;
       virtual void deletePoints(const std::string& idsJson) = 0;
-      virtual void setPayload(double pointId, const std::string& payloadJson) = 0;
-      virtual void deletePayload(double pointId, const std::string& keysJson) = 0;
+      virtual void setPayload(const std::string& opJson) = 0;
+      virtual void overwritePayload(const std::string& opJson) = 0;
+      virtual void deletePayload(const std::string& opJson) = 0;
+      virtual void clearPayload(const std::string& targetJson) = 0;
       virtual void createFieldIndex(const std::string& fieldName, const std::string& fieldType) = 0;
       virtual void deleteFieldIndex(const std::string& fieldName) = 0;
       virtual std::string search(const std::string& requestJson) = 0;

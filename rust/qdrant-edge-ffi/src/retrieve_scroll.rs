@@ -8,7 +8,7 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{CountRequest, Filter, ScrollRequest};
+use qdrant_edge::{CountRequest, Filter, PointId, ScrollRequest};
 
 use crate::error::set_last_error;
 use crate::ffi_strings::{cstr_to_str, string_to_c};
@@ -24,16 +24,13 @@ pub unsafe extern "C" fn qe_shard_retrieve(
     with_vector: bool,
 ) -> *mut c_char {
     let json_str = unsafe { cstr_to_str(ids_json) };
-    let ids: Vec<u64> = match serde_json::from_str(json_str) {
+    let point_ids: Vec<PointId> = match serde_json::from_str(json_str) {
         Ok(i) => i,
         Err(e) => {
             set_last_error(format!("Failed to parse IDs: {e}"));
             return ptr::null_mut();
         }
     };
-
-    let point_ids: Vec<qdrant_edge::PointId> =
-        ids.into_iter().map(qdrant_edge::PointId::from).collect();
 
     let wp = Some(qdrant_edge::WithPayloadInterface::Bool(with_payload));
     let wv = Some(qdrant_edge::WithVector::Bool(with_vector));

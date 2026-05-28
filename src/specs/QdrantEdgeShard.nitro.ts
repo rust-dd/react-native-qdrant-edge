@@ -28,17 +28,24 @@ export interface QdrantEdgeShard extends HybridObject<{
    */
   deletePoints(idsJson: string): void
   /**
-   * Set payload on a point.
-   * @param pointId - The point ID
-   * @param payloadJson - JSON object with payload fields
+   * Set (merge) payload fields.
+   * @param opJson - JSON SetPayloadOp: `{ payload, points?, filter?, key? }`
    */
-  setPayload(pointId: number, payloadJson: string): void
+  setPayload(opJson: string): void
   /**
-   * Delete payload keys from a point.
-   * @param pointId - The point ID
-   * @param keysJson - JSON array of key names to delete
+   * Overwrite payload entirely. Same shape as `setPayload`.
    */
-  deletePayload(pointId: number, keysJson: string): void
+  overwritePayload(opJson: string): void
+  /**
+   * Delete specific payload keys.
+   * @param opJson - JSON DeletePayloadOp: `{ keys, points?, filter? }`
+   */
+  deletePayload(opJson: string): void
+  /**
+   * Clear all payload from a set of points or by filter.
+   * @param targetJson - JSON `{ points: [...] }` OR `{ filter: ... }`
+   */
+  clearPayload(targetJson: string): void
   /**
    * Create a field index for filtering.
    * @param fieldName - The payload field name to index

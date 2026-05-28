@@ -58,17 +58,31 @@ public:
     }
   }
 
-  void setPayload(double pointId, const std::string& payloadJson) override {
+  void setPayload(const std::string& opJson) override {
     ensureOpen();
-    if (qe_shard_set_payload(_handle, static_cast<uint64_t>(pointId), payloadJson.c_str()) < 0) {
+    if (qe_shard_set_payload(_handle, opJson.c_str()) < 0) {
       throwLastError("setPayload");
     }
   }
 
-  void deletePayload(double pointId, const std::string& keysJson) override {
+  void overwritePayload(const std::string& opJson) override {
     ensureOpen();
-    if (qe_shard_delete_payload(_handle, static_cast<uint64_t>(pointId), keysJson.c_str()) < 0) {
+    if (qe_shard_overwrite_payload(_handle, opJson.c_str()) < 0) {
+      throwLastError("overwritePayload");
+    }
+  }
+
+  void deletePayload(const std::string& opJson) override {
+    ensureOpen();
+    if (qe_shard_delete_payload(_handle, opJson.c_str()) < 0) {
       throwLastError("deletePayload");
+    }
+  }
+
+  void clearPayload(const std::string& targetJson) override {
+    ensureOpen();
+    if (qe_shard_clear_payload(_handle, targetJson.c_str()) < 0) {
+      throwLastError("clearPayload");
     }
   }
 

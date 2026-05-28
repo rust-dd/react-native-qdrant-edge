@@ -20,7 +20,9 @@ namespace margelo::nitro::qdrantedge {
       prototype.registerHybridMethod("upsert", &HybridQdrantEdgeShardSpec::upsert);
       prototype.registerHybridMethod("deletePoints", &HybridQdrantEdgeShardSpec::deletePoints);
       prototype.registerHybridMethod("setPayload", &HybridQdrantEdgeShardSpec::setPayload);
+      prototype.registerHybridMethod("overwritePayload", &HybridQdrantEdgeShardSpec::overwritePayload);
       prototype.registerHybridMethod("deletePayload", &HybridQdrantEdgeShardSpec::deletePayload);
+      prototype.registerHybridMethod("clearPayload", &HybridQdrantEdgeShardSpec::clearPayload);
       prototype.registerHybridMethod("createFieldIndex", &HybridQdrantEdgeShardSpec::createFieldIndex);
       prototype.registerHybridMethod("deleteFieldIndex", &HybridQdrantEdgeShardSpec::deleteFieldIndex);
       prototype.registerHybridMethod("search", &HybridQdrantEdgeShardSpec::search);

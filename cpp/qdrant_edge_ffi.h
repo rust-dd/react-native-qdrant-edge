@@ -136,18 +136,25 @@ void qe_shard_flush(struct QeShardHandle *handle);
 int32_t qe_shard_optimize(struct QeShardHandle *handle);
 
 /**
- * Set payload on a point.
+ * Set (merge) payload fields. `op_json`: `{ payload, points?, filter?, key? }`.
  */
-int32_t qe_shard_set_payload(struct QeShardHandle *handle,
-                             uint64_t point_id,
-                             const char *payload_json);
+int32_t qe_shard_set_payload(struct QeShardHandle *handle, const char *op_json);
 
 /**
- * Delete payload keys from a point.
+ * Overwrite payload entirely. Same JSON shape as set_payload.
  */
-int32_t qe_shard_delete_payload(struct QeShardHandle *handle,
-                                uint64_t point_id,
-                                const char *keys_json);
+int32_t qe_shard_overwrite_payload(struct QeShardHandle *handle, const char *op_json);
+
+/**
+ * Delete specific payload keys. `op_json`: `{ keys, points?, filter? }`.
+ */
+int32_t qe_shard_delete_payload(struct QeShardHandle *handle, const char *op_json);
+
+/**
+ * Clear all payload from a set of points or by filter.
+ * `target_json`: `{ points: [...] }` OR `{ filter: ... }`.
+ */
+int32_t qe_shard_clear_payload(struct QeShardHandle *handle, const char *target_json);
 
 /**
  * Upsert points. `points_json` is a JSON array of `PointInput` objects.
@@ -156,8 +163,8 @@ int32_t qe_shard_delete_payload(struct QeShardHandle *handle,
 int32_t qe_shard_upsert(struct QeShardHandle *handle, const char *points_json);
 
 /**
- * Delete points by IDs. `ids_json` is a JSON array of u64 IDs.
- * Returns 0 on success, -1 on error.
+ * Delete points by IDs. `ids_json` is a JSON array; each element is a u64 or
+ * a UUID string. Returns 0 on success, -1 on error.
  */
 int32_t qe_shard_delete_points(struct QeShardHandle *handle, const char *ids_json);
 

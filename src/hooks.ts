@@ -10,6 +10,7 @@ import type {
   FacetResponse,
   FieldIndexType,
   Point,
+  PointId,
   QueryRequest,
   RetrievedPoint,
   ScoredPoint,
@@ -35,14 +36,14 @@ class ShardWrapper {
   upsert(points: Point[]) {
     this._raw.upsert(JSON.stringify(points))
   }
-  deletePoints(ids: number[]) {
+  deletePoints(ids: PointId[]) {
     this._raw.deletePoints(JSON.stringify(ids))
   }
-  setPayload(id: number, payload: Record<string, unknown>) {
-    this._raw.setPayload(id, JSON.stringify(payload))
+  setPayload(id: PointId, payload: Record<string, unknown>, key?: string) {
+    this._raw.setPayload(JSON.stringify({ payload, points: [id], key }))
   }
-  deletePayload(id: number, keys: string[]) {
-    this._raw.deletePayload(id, JSON.stringify(keys))
+  deletePayload(id: PointId, keys: string[]) {
+    this._raw.deletePayload(JSON.stringify({ keys, points: [id] }))
   }
   createFieldIndex(name: string, type: FieldIndexType) {
     this._raw.createFieldIndex(name, type)
@@ -57,7 +58,7 @@ class ShardWrapper {
     return JSON.parse(this._raw.query(JSON.stringify(req)))
   }
   retrieve(
-    ids: number[],
+    ids: PointId[],
     opts: { withPayload?: boolean; withVector?: boolean } = {}
   ): RetrievedPoint[] {
     return JSON.parse(
@@ -189,7 +190,7 @@ export function useUpsert(shard: ShardWrapper | null): UseUpsertResult {
 }
 
 export interface UseDeleteResult {
-  deletePoints: (ids: number[]) => void
+  deletePoints: (ids: PointId[]) => void
   error: string | null
 }
 
@@ -197,7 +198,7 @@ export function useDelete(shard: ShardWrapper | null): UseDeleteResult {
   const [error, setError] = useState<string | null>(null)
 
   const deletePoints = useCallback(
-    (ids: number[]) => {
+    (ids: PointId[]) => {
       if (!shard) {
         setError('shard not open')
         return
@@ -301,7 +302,7 @@ export interface UseRetrieveResult {
   points: RetrievedPoint[]
   error: string | null
   retrieve: (
-    ids: number[],
+    ids: PointId[],
     opts?: { withPayload?: boolean; withVector?: boolean }
   ) => RetrievedPoint[]
 }
@@ -311,7 +312,7 @@ export function useRetrieve(shard: ShardWrapper | null): UseRetrieveResult {
   const [error, setError] = useState<string | null>(null)
 
   const retrieve = useCallback(
-    (ids: number[], opts?: { withPayload?: boolean; withVector?: boolean }) => {
+    (ids: PointId[], opts?: { withPayload?: boolean; withVector?: boolean }) => {
       if (!shard) {
         setError('shard not open')
         return []

@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{Filter, PointStruct, Vector, VectorInternal, Vectors};
+use qdrant_edge::{Filter, PointId, PointStruct, Vector, VectorInternal, Vectors};
 use serde::{Deserialize, Serialize};
 
 /// One vector in dense / multi-dense / sparse form. Serde tries variants in
@@ -70,7 +70,9 @@ impl VectorInput {
 
 #[derive(Deserialize)]
 pub(crate) struct PointInput {
-    pub(crate) id: u64,
+    /// `PointId` deserializes from a number (u64) or a UUID string —
+    /// upstream `ExtendedPointId` is `#[serde(untagged)]` over the two.
+    pub(crate) id: PointId,
     pub(crate) vector: VectorInput,
     #[serde(default)]
     pub(crate) payload: Option<serde_json::Value>,
