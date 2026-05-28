@@ -20,28 +20,53 @@ export interface EdgeConfig {
   on_disk_payload?: boolean
 }
 
+export type DenseVector = number[]
+
+/** Sparse vector wire shape: `indices` is the term id, `values` the weight. */
+export interface SparseVector {
+  indices: number[]
+  values: number[]
+}
+
+/** Multi-vector (ColBERT-style late-interaction); a matrix of dense rows. */
+export type MultiVector = number[][]
+
+/** Any single-vector shape: dense, sparse, or multi. */
+export type AnyVector = DenseVector | SparseVector | MultiVector
+
+/**
+ * Vector input on a point. A bare value is the un-named (default) vector;
+ * a `{ name: vector }` map carries multiple named vectors and may mix shapes.
+ */
+export type VectorInput = AnyVector | Record<string, AnyVector>
+
 export interface Point {
   id: number
-  vector: number[] | Record<string, number[]>
+  vector: VectorInput
   payload?: Record<string, unknown>
 }
+
+/** Vector shape in a result. Sparse comes back as `{ indices, values }` only
+ *  inside the named-map form (the upstream `Single` variant is dense-only). */
+export type ResultVector = DenseVector | MultiVector | SparseVector
+export type ResultVectorMap = Record<string, ResultVector>
 
 export interface ScoredPoint {
   id: string
   score: number
   version: number
   payload?: Record<string, unknown>
-  vector?: number[] | Record<string, unknown>
+  vector?: ResultVector | ResultVectorMap
 }
 
 export interface RetrievedPoint {
   id: string
   payload?: Record<string, unknown>
-  vector?: number[] | Record<string, unknown>
+  vector?: ResultVector | ResultVectorMap
 }
 
 export interface SearchRequest {
-  vector: number[]
+  vector: AnyVector
   using?: string
   filter?: Filter
   limit?: number

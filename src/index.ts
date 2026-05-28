@@ -15,21 +15,28 @@ import type {
 } from './types'
 
 export type {
+  AnyVector,
+  DenseVector,
   Distance,
   EdgeConfig,
   FieldIndexType,
   Filter,
   MatchCondition,
+  MultiVector,
   Point,
   QueryRequest,
   RangeCondition,
+  ResultVector,
+  ResultVectorMap,
   RetrievedPoint,
   ScoredPoint,
   ScrollRequest,
   ScrollResult,
   SearchRequest,
   ShardInfo,
+  SparseVector,
   SparseVectorParams,
+  VectorInput,
   VectorParams,
 } from './types'
 

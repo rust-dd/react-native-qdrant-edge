@@ -5,33 +5,80 @@
 use std::collections::HashMap;
 
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{Filter, PointStruct, Vector, Vectors};
+use qdrant_edge::{Filter, PointStruct, Vector, VectorInternal, Vectors};
 use serde::{Deserialize, Serialize};
+
+/// One vector in dense / multi-dense / sparse form. Serde tries variants in
+/// declaration order; the three shapes are non-overlapping (array of numbers,
+/// array of arrays, object with `indices`/`values`).
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum AnyVectorInput {
+    Dense(Vec<f32>),
+    Multi(Vec<Vec<f32>>),
+    Sparse(SparseVectorInput),
+}
+
+#[derive(Deserialize)]
+pub(crate) struct SparseVectorInput {
+    pub(crate) indices: Vec<u32>,
+    pub(crate) values: Vec<f32>,
+}
+
+impl AnyVectorInput {
+    pub(crate) fn into_vector(self) -> Result<Vector, String> {
+        match self {
+            Self::Dense(v) => Ok(Vector::new_dense(v)),
+            Self::Multi(m) => Vector::new_multi(m).map_err(|e| format!("multi vector: {e}")),
+            Self::Sparse(s) => Vector::new_sparse(s.indices, s.values)
+                .map_err(|e| format!("sparse vector: {e}")),
+        }
+    }
+
+    pub(crate) fn into_vector_internal(self) -> Result<VectorInternal, String> {
+        self.into_vector().map(VectorInternal::from)
+    }
+}
+
+/// A point can carry a single un-named vector (any shape) or a map of named
+/// vectors (each any shape — mixed dense + sparse + multi is allowed).
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum VectorInput {
+    Single(AnyVectorInput),
+    Named(HashMap<String, AnyVectorInput>),
+}
+
+impl VectorInput {
+    pub(crate) fn into_vectors(self) -> Result<Vectors, String> {
+        match self {
+            VectorInput::Single(AnyVectorInput::Dense(v)) => Ok(Vectors::from(v)),
+            VectorInput::Single(any) => {
+                let vec = any.into_vector()?;
+                Ok(Vectors::new_named([(qdrant_edge::DEFAULT_VECTOR_NAME, vec)]))
+            }
+            VectorInput::Named(map) => {
+                let entries = map
+                    .into_iter()
+                    .map(|(k, any)| any.into_vector().map(|v| (k, v)))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Vectors::new_named(entries))
+            }
+        }
+    }
+}
 
 #[derive(Deserialize)]
 pub(crate) struct PointInput {
     pub(crate) id: u64,
-    /// Either a flat vector `[f32, …]` or named vectors `{ "name": [f32, …] }`.
     pub(crate) vector: VectorInput,
     #[serde(default)]
     pub(crate) payload: Option<serde_json::Value>,
 }
 
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub(crate) enum VectorInput {
-    Dense(Vec<f32>),
-    Named(HashMap<String, Vec<f32>>),
-}
-
 impl PointInput {
     pub(crate) fn into_point_struct(self) -> Result<PointStruct, String> {
-        let vectors: Vectors = match self.vector {
-            VectorInput::Dense(v) => Vectors::from(v),
-            VectorInput::Named(map) => {
-                Vectors::new_named(map.into_iter().map(|(k, v)| (k, Vector::new_dense(v))))
-            }
-        };
+        let vectors = self.vector.into_vectors()?;
         let payload = self
             .payload
             .unwrap_or(serde_json::Value::Object(Default::default()));
@@ -42,7 +89,7 @@ impl PointInput {
 /// JSON-deserializable search request (since `CoreSearchRequest` doesn't impl Deserialize).
 #[derive(Deserialize)]
 pub(crate) struct SearchInput {
-    pub(crate) vector: Vec<f32>,
+    pub(crate) vector: AnyVectorInput,
     #[serde(default)]
     pub(crate) using: Option<String>,
     #[serde(default)]
@@ -66,7 +113,7 @@ pub(crate) fn default_limit() -> usize {
 impl SearchInput {
     pub(crate) fn into_search_request(self) -> Result<qdrant_edge::SearchRequest, String> {
         let query = qdrant_edge::QueryEnum::Nearest(qdrant_edge::NamedQuery {
-            query: qdrant_edge::VectorInternal::Dense(self.vector.into()),
+            query: self.vector.into_vector_internal()?,
             using: self.using,
         });
         Ok(qdrant_edge::SearchRequest {
@@ -85,6 +132,7 @@ impl SearchInput {
 }
 
 /// JSON-deserializable query request (since `ShardQueryRequest` doesn't impl Deserialize).
+/// Dense-only for now; the full prefetch + fusion + clause tree lands in a later commit.
 #[derive(Deserialize)]
 pub(crate) struct QueryInput {
     #[serde(default)]
