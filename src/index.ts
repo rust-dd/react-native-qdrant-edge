@@ -152,6 +152,8 @@ export function loadShard(path: string, config?: EdgeConfig): Shard {
   return new Shard(raw)
 }
 
+export { QdrantError, asQdrantError } from './errors'
+
 export {
   useShard,
   useUpsert,

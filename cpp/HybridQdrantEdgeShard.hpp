@@ -89,24 +89,28 @@ public:
   std::string search(const std::string& requestJson) override {
     ensureOpen();
     char* result = qe_shard_search(_handle, requestJson.c_str());
+    if (!result) throwLastError("search");
     return takeString(result);
   }
 
   std::string query(const std::string& requestJson) override {
     ensureOpen();
     char* result = qe_shard_query(_handle, requestJson.c_str());
+    if (!result) throwLastError("query");
     return takeString(result);
   }
 
   std::string retrieve(const std::string& idsJson, bool withPayload, bool withVector) override {
     ensureOpen();
     char* result = qe_shard_retrieve(_handle, idsJson.c_str(), withPayload, withVector);
+    if (!result) throwLastError("retrieve");
     return takeString(result);
   }
 
   std::string scroll(const std::string& requestJson) override {
     ensureOpen();
     char* result = qe_shard_scroll(_handle, requestJson.c_str());
+    if (!result) throwLastError("scroll");
     return takeString(result);
   }
 
@@ -120,6 +124,7 @@ public:
   std::string info() override {
     ensureOpen();
     char* result = qe_shard_info(_handle);
+    if (!result) throwLastError("info");
     return takeString(result);
   }
 
@@ -139,8 +144,12 @@ private:
     throw std::runtime_error(std::string(operation) + " failed: " + msg);
   }
 
+  // Caller is responsible for null-checking before this is invoked;
+  // a null here means a missing throwLastError site, which is a bug.
   static std::string takeString(char* ptr) {
-    if (!ptr) return "null";
+    if (!ptr) {
+      throw std::runtime_error("qdrant-edge: takeString received null (missing error check)");
+    }
     std::string s(ptr);
     qe_free_string(ptr);
     return s;

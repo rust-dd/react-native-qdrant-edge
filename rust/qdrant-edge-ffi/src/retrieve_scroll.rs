@@ -1,16 +1,21 @@
 //! Retrieve, scroll, and count operations.
+//!
+//! `retrieve` and `scroll` return `null` on error after stashing the message
+//! via [`set_last_error`]; `count` returns `-1`. The C++ bridge converts both
+//! sentinels into thrown exceptions.
 
 use std::os::raw::c_char;
+use std::ptr;
 
 use qdrant_edge::external::serde_json;
 use qdrant_edge::{CountRequest, Filter, ScrollRequest};
 
-use crate::error::{error_json, set_last_error};
+use crate::error::set_last_error;
 use crate::ffi_strings::{cstr_to_str, string_to_c};
 use crate::handle::{QeShardHandle, with_shard};
 use crate::serde_types::{RecordOutput, ScrollOutput};
 
-/// Retrieve specific points by IDs. Returns a JSON string.
+/// Retrieve specific points by IDs. Returns JSON, or `null` on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_shard_retrieve(
     handle: *mut QeShardHandle,
@@ -21,7 +26,10 @@ pub unsafe extern "C" fn qe_shard_retrieve(
     let json_str = unsafe { cstr_to_str(ids_json) };
     let ids: Vec<u64> = match serde_json::from_str(json_str) {
         Ok(i) => i,
-        Err(e) => return error_json(&format!("Failed to parse IDs: {e}")),
+        Err(e) => {
+            set_last_error(format!("Failed to parse IDs: {e}"));
+            return ptr::null_mut();
+        }
     };
 
     let point_ids: Vec<qdrant_edge::PointId> =
@@ -30,20 +38,20 @@ pub unsafe extern "C" fn qe_shard_retrieve(
     let wp = Some(qdrant_edge::WithPayloadInterface::Bool(with_payload));
     let wv = Some(qdrant_edge::WithVector::Bool(with_vector));
 
-    let mut result_ptr = error_json("shard not available");
+    let mut result_ptr: *mut c_char = ptr::null_mut();
     with_shard(handle, |shard| match shard.retrieve(&point_ids, wp, wv) {
         Ok(records) => {
             let output: Vec<RecordOutput> = records.into_iter().map(RecordOutput::from).collect();
             result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
         }
         Err(e) => {
-            result_ptr = error_json(&format!("retrieve failed: {e}"));
+            set_last_error(format!("retrieve failed: {e}"));
         }
     });
     result_ptr
 }
 
-/// Scroll through points. Returns JSON with `{ points, next_offset }`.
+/// Scroll through points. Returns JSON `{ points, next_offset }`, or `null` on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_shard_scroll(
     handle: *mut QeShardHandle,
@@ -52,10 +60,13 @@ pub unsafe extern "C" fn qe_shard_scroll(
     let json_str = unsafe { cstr_to_str(request_json) };
     let req: ScrollRequest = match serde_json::from_str(json_str) {
         Ok(r) => r,
-        Err(e) => return error_json(&format!("Failed to parse scroll request: {e}")),
+        Err(e) => {
+            set_last_error(format!("Failed to parse scroll request: {e}"));
+            return ptr::null_mut();
+        }
     };
 
-    let mut result_ptr = error_json("shard not available");
+    let mut result_ptr: *mut c_char = ptr::null_mut();
     with_shard(handle, |shard| match shard.scroll(req) {
         Ok((records, next_offset)) => {
             let output = ScrollOutput {
@@ -65,13 +76,13 @@ pub unsafe extern "C" fn qe_shard_scroll(
             result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
         }
         Err(e) => {
-            result_ptr = error_json(&format!("scroll failed: {e}"));
+            set_last_error(format!("scroll failed: {e}"));
         }
     });
     result_ptr
 }
 
-/// Count points, optionally with a filter. Returns count or -1 on error.
+/// Count points, optionally with a filter. Returns count or `-1` on error.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_shard_count(
     handle: *mut QeShardHandle,
