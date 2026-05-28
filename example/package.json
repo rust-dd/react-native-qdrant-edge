@@ -9,20 +9,20 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "55.0.10-canary-20260328-bdc6273",
-    "expo-constants": "55.0.10-canary-20260328-bdc6273",
-    "expo-file-system": "55.0.13-canary-20260328-bdc6273",
-    "expo-linking": "55.0.10-canary-20260328-bdc6273",
-    "expo-router": "55.0.9-canary-20260328-bdc6273",
-    "expo-status-bar": "55.0.5-canary-20260328-bdc6273",
-    "react": "19.2.0",
-    "react-native": "0.83.4",
-    "react-native-nitro-modules": "^0.35.2",
+    "expo": "^56.0.6",
+    "expo-constants": "^56.0.16",
+    "expo-file-system": "^56.0.7",
+    "expo-linking": "^56.0.12",
+    "expo-router": "^56.2.7",
+    "expo-status-bar": "^56.0.4",
+    "react": "^19.2.0",
+    "react-native": "^0.85.3",
+    "react-native-nitro-modules": "^0.35.9",
     "react-native-qdrant-edge": "file:.."
   },
   "devDependencies": {
-    "@types/react": "~19.2.2",
-    "typescript": "~5.9.2"
+    "@types/react": "^19.2.15",
+    "typescript": "~6.0.3"
   },
   "private": true
 }
