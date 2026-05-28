@@ -33,6 +33,13 @@ export default function Layout() {
         }}
       />
       <Tabs.Screen
+        name="hybrid"
+        options={{
+          title: 'BM25',
+          tabBarIcon: ({ color, size }) => <Ionicons name="layers-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="benchmark"
         options={{
           title: 'Benchmark',
