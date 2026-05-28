@@ -161,3 +161,16 @@ dependencies {
   implementation project(":react-native-nitro-modules")
 }
 
+// Without this `react { }` block, the React Gradle Plugin scans every npm
+// package in the app and emits view-manager codegen for all of them into our
+// AAR, then the same classes appear again from each real owner (e.g.
+// react-native-screens) and D8 fails with duplicate-type errors. Pinning
+// `libraryName` keeps codegen scoped to this lib alone.
+if (isNewArchitectureEnabled()) {
+  react {
+    jsRootDir = file("../src/")
+    libraryName = "NitroQdrantEdge"
+    codegenJavaPackageName = "com.margelo.nitro.qdrantedge"
+  }
+}
+
