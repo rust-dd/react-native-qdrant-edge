@@ -60,7 +60,7 @@ export default function HybridScreen() {
       const model = createBm25({ language: 'english' })
       const s = createShard(path, {
         vectors: {},
-        sparse_vectors: { bm25: { modifier: 'Idf' } },
+        sparse_vectors: { bm25: { modifier: 'idf' } },
       })
       s.upsert(DOCS.map(d => ({
         id: d.id,

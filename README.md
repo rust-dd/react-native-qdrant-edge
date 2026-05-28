@@ -97,7 +97,7 @@ const shard = createShard(path, {
     'image':  { size: 512, distance: 'Cosine', on_disk: true },
   },
   sparse_vectors: {
-    'bm25': { modifier: 'Idf' },                         // BM25 sparse slot
+    'bm25': { modifier: 'idf' },                         // BM25 sparse slot
   },
   on_disk_payload: true,
   hnsw_config:    { m: 16, ef_construct: 100 },

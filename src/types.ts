@@ -15,7 +15,7 @@ export interface VectorParams {
 export interface SparseVectorParams {
   full_scan_threshold?: number
   on_disk?: boolean
-  modifier?: 'None' | 'Idf'
+  modifier?: 'none' | 'idf'
   datatype?: 'Float32' | 'Float16' | 'Uint8'
 }
 
