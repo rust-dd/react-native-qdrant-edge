@@ -88,15 +88,69 @@ export interface FusionClause {
   weights?: number[]
 }
 
+/** Recommend (positive + negative examples). `strategy` defaults to `'best_score'`. */
+export interface RecommendClause {
+  recommend: {
+    positive?: AnyVector[]
+    negative?: AnyVector[]
+    strategy?: 'best_score' | 'sum_scores'
+  }
+}
+
+/** Discover (target + positive/negative context pairs). */
+export interface DiscoverClause {
+  discover: {
+    target: AnyVector
+    context?: Array<{ positive: AnyVector; negative: AnyVector }>
+  }
+}
+
+/** Context (positive/negative pairs only — no target). */
+export interface ContextClause {
+  context: Array<{ positive: AnyVector; negative: AnyVector }>
+}
+
+export interface OrderByClause {
+  order_by: {
+    key: string
+    direction?: 'asc' | 'desc'
+    /** Where to start ordering from: number for int/float, or ISO string for datetime. */
+    start_from?: number | string
+  }
+}
+
+export interface SampleClause {
+  sample: 'random'
+}
+
+/** Maximal Marginal Relevance — diversity-aware rerank. */
+export interface MmrClause {
+  mmr: {
+    vector: AnyVector
+    /** `0.0` = full diversity, `1.0` = full relevance. Default `0.5`. */
+    lambda?: number
+    /** Candidate pool size before MMR rerank. Default `100`. */
+    candidates_limit?: number
+  }
+}
+
 /**
  * The scoring clause at a query/prefetch level. A bare vector value is a
- * nearest-neighbor search (shape determines dense / sparse / multi); a
- * `{ fusion }` object combines prefetched sources.
+ * nearest-neighbor search (shape determines dense / sparse / multi); the
+ * object variants pick the corresponding upstream `ScoringQuery`.
  *
- * The advanced clauses (recommend, discover, context, MMR, formula, order_by,
- * sample) ship in a later release.
+ * Formula rescoring is intentionally absent — the upstream AST does not
+ * impl Deserialize and would need a typed builder API.
  */
-export type QueryClause = AnyVector | FusionClause
+export type QueryClause =
+  | AnyVector
+  | FusionClause
+  | RecommendClause
+  | DiscoverClause
+  | ContextClause
+  | OrderByClause
+  | SampleClause
+  | MmrClause
 
 export interface Prefetch {
   /** Scoring clause for this prefetch level. */
