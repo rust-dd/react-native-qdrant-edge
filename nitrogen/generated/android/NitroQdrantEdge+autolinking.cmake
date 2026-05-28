@@ -34,6 +34,7 @@ target_sources(
   ../nitrogen/generated/android/NitroQdrantEdgeOnLoad.cpp
   # Shared Nitrogen C++ sources
   ../nitrogen/generated/shared/c++/HybridQdrantEdgeSpec.cpp
+  ../nitrogen/generated/shared/c++/HybridQdrantEdgeBm25Spec.cpp
   ../nitrogen/generated/shared/c++/HybridQdrantEdgeShardSpec.cpp
   # Android-specific Nitrogen C++ sources
   

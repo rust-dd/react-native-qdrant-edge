@@ -1,8 +1,9 @@
 import type { HybridObject } from 'react-native-nitro-modules'
+import type { QdrantEdgeBm25 } from './QdrantEdgeBm25.nitro'
 import type { QdrantEdgeShard } from './QdrantEdgeShard.nitro'
 
 /**
- * Factory for creating and loading Qdrant Edge shards.
+ * Factory for creating shards and BM25 embedders.
  */
 export interface QdrantEdge extends HybridObject<{
   ios: 'c++'
@@ -22,4 +23,10 @@ export interface QdrantEdge extends HybridObject<{
    * @returns An open QdrantEdgeShard
    */
   loadShard(path: string, configJson: string): QdrantEdgeShard
+  /**
+   * Construct a BM25 sparse-embedding model.
+   * @param configJson - JSON Bm25Config (empty string = defaults)
+   * @returns A QdrantEdgeBm25 model
+   */
+  createBm25(configJson: string): QdrantEdgeBm25
 }

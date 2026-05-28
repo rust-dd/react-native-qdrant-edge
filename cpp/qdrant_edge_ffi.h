@@ -9,7 +9,12 @@
 #include <stdlib.h>
 
 /**
- * Opaque handle to an EdgeShard, protected by a Mutex for thread safety.
+ * Opaque handle to an `EdgeBm25` model.
+ */
+typedef struct QeBm25Handle QeBm25Handle;
+
+/**
+ * Opaque handle to an `EdgeShard`, protected by a Mutex for thread safety.
  */
 typedef struct QeShardHandle QeShardHandle;
 
@@ -18,13 +23,64 @@ extern "C" {
 #endif // __cplusplus
 
 /**
- * Create a new shard. `config_json` is a JSON-serialized EdgeConfig.
+ * Construct a BM25 embedder from a JSON `EdgeBm25Config`. Empty input uses defaults.
+ * Returns an opaque handle, or null on error (check `qe_last_error`).
+ */
+struct QeBm25Handle *qe_bm25_create(const char *config_json);
+
+/**
+ * Free a BM25 handle.
+ */
+void qe_bm25_destroy(struct QeBm25Handle *handle);
+
+/**
+ * Embed a query: each unique token weighted `1.0`.
+ * Returns JSON `{ indices: number[], values: number[] }`, or null on error.
+ */
+char *qe_bm25_embed_query(struct QeBm25Handle *handle, const char *text);
+
+/**
+ * Embed a document: each unique token weighted by the BM25 TF formula.
+ * Returns JSON `{ indices: number[], values: number[] }`, or null on error.
+ */
+char *qe_bm25_embed_document(struct QeBm25Handle *handle, const char *text);
+
+/**
+ * Get the last error message. Returns null if no error.
+ * Caller must free the returned string with `qe_free_string`.
+ */
+char *qe_last_error(void);
+
+/**
+ * Free a string returned by any `qe_*` function.
+ */
+void qe_free_string(char *ptr);
+
+/**
+ * Create a field index.
+ */
+int32_t qe_shard_create_field_index(struct QeShardHandle *handle,
+                                    const char *field_name,
+                                    const char *field_type);
+
+/**
+ * Delete a field index.
+ */
+int32_t qe_shard_delete_field_index(struct QeShardHandle *handle, const char *field_name);
+
+/**
+ * Get shard info. Returns a JSON object, or `null` on error.
+ */
+char *qe_shard_info(struct QeShardHandle *handle);
+
+/**
+ * Create a new shard. `config_json` is a JSON-serialized `EdgeConfig`.
  * Returns an opaque handle, or null on error (check `qe_last_error`).
  */
 struct QeShardHandle *qe_shard_create(const char *path, const char *config_json);
 
 /**
- * Load an existing shard from disk. `config_json` can be empty for default.
+ * Load an existing shard from disk. `config_json` can be empty for the stored default.
  */
 struct QeShardHandle *qe_shard_load(const char *path, const char *config_json);
 
@@ -45,18 +101,6 @@ void qe_shard_flush(struct QeShardHandle *handle);
 int32_t qe_shard_optimize(struct QeShardHandle *handle);
 
 /**
- * Upsert points. `points_json` is a JSON array of PointInput objects.
- * Returns 0 on success, -1 on error.
- */
-int32_t qe_shard_upsert(struct QeShardHandle *handle, const char *points_json);
-
-/**
- * Delete points by IDs. `ids_json` is a JSON array of u64 IDs.
- * Returns 0 on success, -1 on error.
- */
-int32_t qe_shard_delete_points(struct QeShardHandle *handle, const char *ids_json);
-
-/**
  * Set payload on a point.
  */
 int32_t qe_shard_set_payload(struct QeShardHandle *handle,
@@ -71,31 +115,19 @@ int32_t qe_shard_delete_payload(struct QeShardHandle *handle,
                                 const char *keys_json);
 
 /**
- * Create a field index.
+ * Upsert points. `points_json` is a JSON array of `PointInput` objects.
+ * Returns 0 on success, -1 on error.
  */
-int32_t qe_shard_create_field_index(struct QeShardHandle *handle,
-                                    const char *field_name,
-                                    const char *field_type);
+int32_t qe_shard_upsert(struct QeShardHandle *handle, const char *points_json);
 
 /**
- * Delete a field index.
+ * Delete points by IDs. `ids_json` is a JSON array of u64 IDs.
+ * Returns 0 on success, -1 on error.
  */
-int32_t qe_shard_delete_field_index(struct QeShardHandle *handle, const char *field_name);
+int32_t qe_shard_delete_points(struct QeShardHandle *handle, const char *ids_json);
 
 /**
- * Search for nearest neighbors. Returns JSON string with results.
- * The caller must free the returned string with `qe_free_string`.
- */
-char *qe_shard_search(struct QeShardHandle *handle, const char *request_json);
-
-/**
- * Full query with prefetches and fusion. Returns JSON string.
- * The caller must free the returned string with `qe_free_string`.
- */
-char *qe_shard_query(struct QeShardHandle *handle, const char *request_json);
-
-/**
- * Retrieve specific points by IDs. Returns JSON string.
+ * Retrieve specific points by IDs. Returns JSON, or `null` on error.
  */
 char *qe_shard_retrieve(struct QeShardHandle *handle,
                         const char *ids_json,
@@ -103,29 +135,26 @@ char *qe_shard_retrieve(struct QeShardHandle *handle,
                         bool with_vector);
 
 /**
- * Scroll through points. Returns JSON string with { points, next_offset }.
+ * Scroll through points. Returns JSON `{ points, next_offset }`, or `null` on error.
  */
 char *qe_shard_scroll(struct QeShardHandle *handle, const char *request_json);
 
 /**
- * Count points, optionally with a filter. Returns count or -1 on error.
+ * Count points, optionally with a filter. Returns count or `-1` on error.
  */
 int64_t qe_shard_count(struct QeShardHandle *handle, const char *filter_json);
 
 /**
- * Get shard info. Returns JSON string.
+ * Nearest-neighbor search. Returns a JSON array of scored points, or `null` on error.
+ * The caller must free the returned string with `qe_free_string`.
  */
-char *qe_shard_info(struct QeShardHandle *handle);
+char *qe_shard_search(struct QeShardHandle *handle, const char *request_json);
 
 /**
- * Free a string returned by any qe_ function.
+ * Full query with prefetches and fusion. Returns a JSON array of scored points,
+ * or `null` on error. The caller must free the returned string with `qe_free_string`.
  */
-void qe_free_string(char *ptr);
-
-/**
- * Get the last error message. Returns null if no error. Caller must free with qe_free_string.
- */
-char *qe_last_error(void);
+char *qe_shard_query(struct QeShardHandle *handle, const char *request_json);
 
 #ifdef __cplusplus
 }  // extern "C"

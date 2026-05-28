@@ -15,10 +15,13 @@
 
 // Forward declaration of `HybridQdrantEdgeShardSpec` to properly resolve imports.
 namespace margelo::nitro::qdrantedge { class HybridQdrantEdgeShardSpec; }
+// Forward declaration of `HybridQdrantEdgeBm25Spec` to properly resolve imports.
+namespace margelo::nitro::qdrantedge { class HybridQdrantEdgeBm25Spec; }
 
 #include <memory>
 #include "HybridQdrantEdgeShardSpec.hpp"
 #include <string>
+#include "HybridQdrantEdgeBm25Spec.hpp"
 
 namespace margelo::nitro::qdrantedge {
 
@@ -53,6 +56,7 @@ namespace margelo::nitro::qdrantedge {
       // Methods
       virtual std::shared_ptr<HybridQdrantEdgeShardSpec> createShard(const std::string& path, const std::string& configJson) = 0;
       virtual std::shared_ptr<HybridQdrantEdgeShardSpec> loadShard(const std::string& path, const std::string& configJson) = 0;
+      virtual std::shared_ptr<HybridQdrantEdgeBm25Spec> createBm25(const std::string& configJson) = 0;
 
     protected:
       // Hybrid Setup

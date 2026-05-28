@@ -1,7 +1,9 @@
 import { NitroModules } from 'react-native-nitro-modules'
 import type { QdrantEdge } from './specs/QdrantEdge.nitro'
+import type { QdrantEdgeBm25 } from './specs/QdrantEdgeBm25.nitro'
 import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
+  Bm25Config,
   EdgeConfig,
   FieldIndexType,
   Point,
@@ -12,10 +14,15 @@ import type {
   ScrollResult,
   SearchRequest,
   ShardInfo,
+  SparseVector,
 } from './types'
 
 export type {
   AnyVector,
+  Bm25Config,
+  Bm25Stemmer,
+  Bm25Stopwords,
+  Bm25TokenizerType,
   DenseVector,
   Distance,
   EdgeConfig,
@@ -163,6 +170,46 @@ export function loadShard(path: string, config?: EdgeConfig): Shard {
   return new Shard(raw)
 }
 
+/**
+ * On-device BM25 sparse-embedding model. Reusable across shards and texts;
+ * `dispose()` releases the underlying native model.
+ *
+ * @example
+ * ```ts
+ * import { createBm25 } from 'react-native-qdrant-edge'
+ *
+ * const bm25 = createBm25({ language: 'english' })
+ * const queryVec = bm25.embedQuery('quick fox')          // { indices, values }
+ * const docVec   = bm25.embedDocument('the quick brown fox jumps over the lazy dog')
+ * bm25.close()
+ * ```
+ */
+export class Bm25 {
+  /** @internal */
+  constructor(private readonly _raw: QdrantEdgeBm25) {}
+
+  embedQuery(text: string): SparseVector {
+    return JSON.parse(this._raw.embedQuery(text)) as SparseVector
+  }
+
+  embedDocument(text: string): SparseVector {
+    return JSON.parse(this._raw.embedDocument(text)) as SparseVector
+  }
+
+  close(): void {
+    this._raw.close()
+  }
+}
+
+/**
+ * Create a BM25 sparse-embedding model. Pass an empty config (or omit) for
+ * the default English tokenizer/stopwords/stemmer setup.
+ */
+export function createBm25(config?: Bm25Config): Bm25 {
+  const raw = _factory.createBm25(config ? JSON.stringify(config) : '')
+  return new Bm25(raw)
+}
+
 export { QdrantError, asQdrantError } from './errors'
 
 export {
@@ -175,6 +222,7 @@ export {
   useScroll,
   useCount,
   useShardInfo,
+  useBm25,
 } from './hooks'
 export type {
   UseShardOptions,
@@ -189,4 +237,5 @@ export type {
   UseScrollResult,
   UseCountResult,
   UseShardInfoResult,
+  UseBm25Result,
 } from './hooks'

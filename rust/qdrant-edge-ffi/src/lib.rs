@@ -5,6 +5,7 @@
 //! converts to the actual `qdrant_edge` types — many of the core types
 //! (`SearchRequest`, `QueryRequest`, …) don't implement `Deserialize` directly.
 
+mod bm25;
 mod error;
 mod ffi_strings;
 mod field_index;
@@ -17,6 +18,9 @@ mod retrieve_scroll;
 mod search_query;
 mod serde_types;
 
+pub use bm25::{
+    QeBm25Handle, qe_bm25_create, qe_bm25_destroy, qe_bm25_embed_document, qe_bm25_embed_query,
+};
 pub use error::qe_last_error;
 pub use ffi_strings::qe_free_string;
 pub use field_index::{qe_shard_create_field_index, qe_shard_delete_field_index};

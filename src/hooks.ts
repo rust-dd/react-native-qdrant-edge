@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NitroModules } from 'react-native-nitro-modules'
 import type { QdrantEdge } from './specs/QdrantEdge.nitro'
+import type { QdrantEdgeBm25 } from './specs/QdrantEdgeBm25.nitro'
 import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
+  Bm25Config,
   EdgeConfig,
   FieldIndexType,
   Point,
@@ -13,6 +15,7 @@ import type {
   ScrollResult,
   SearchRequest,
   ShardInfo,
+  SparseVector,
 } from './types'
 
 class ShardWrapper {
@@ -390,6 +393,75 @@ export function useCount(shard: ShardWrapper | null): UseCountResult {
   }, [shard, refresh])
 
   return { count, error, refresh }
+}
+
+class Bm25Wrapper {
+  constructor(private readonly _raw: QdrantEdgeBm25) {}
+  embedQuery(text: string): SparseVector {
+    return JSON.parse(this._raw.embedQuery(text)) as SparseVector
+  }
+  embedDocument(text: string): SparseVector {
+    return JSON.parse(this._raw.embedDocument(text)) as SparseVector
+  }
+  close() {
+    this._raw.close()
+  }
+}
+
+function _createBm25(config?: Bm25Config): Bm25Wrapper {
+  return new Bm25Wrapper(
+    getFactory().createBm25(config ? JSON.stringify(config) : '')
+  )
+}
+
+export interface UseBm25Result {
+  bm25: Bm25Wrapper | null
+  error: string | null
+}
+
+/**
+ * Construct (and own the lifecycle of) a BM25 model. The model is disposed
+ * on unmount; pass `null`/`undefined` to skip creation.
+ */
+export function useBm25(config?: Bm25Config | null): UseBm25Result {
+  const [bm25, setBm25] = useState<Bm25Wrapper | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const ref = useRef<Bm25Wrapper | null>(null)
+  const configKey = config ? JSON.stringify(config) : 'NONE'
+
+  useEffect(() => {
+    if (ref.current) {
+      try {
+        ref.current.close()
+      } catch {}
+      ref.current = null
+    }
+    if (config === null) {
+      setBm25(null)
+      setError(null)
+      return
+    }
+    try {
+      setError(null)
+      const instance = _createBm25(config ?? undefined)
+      ref.current = instance
+      setBm25(instance)
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+      setBm25(null)
+    }
+    return () => {
+      if (ref.current) {
+        try {
+          ref.current.close()
+        } catch {}
+        ref.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configKey])
+
+  return { bm25, error }
 }
 
 export interface UseShardInfoResult {

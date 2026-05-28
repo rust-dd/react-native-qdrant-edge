@@ -185,3 +185,49 @@ export interface ShardInfo {
   points_count: number
   indexed_vectors_count: number
 }
+
+/** BM25 tokenizer choice (Qdrant snake_case wire format). */
+export type Bm25TokenizerType = 'prefix' | 'whitespace' | 'word' | 'multilingual'
+
+/**
+ * Stopwords configuration. A string is interpreted as a snake_case language
+ * name (e.g. `"english"`); an object enables multiple language sets and/or
+ * an additional custom word list.
+ */
+export type Bm25Stopwords =
+  | string
+  | { languages?: string[]; custom?: string[] }
+
+/** Snowball stemmer configuration. `language` is snake_case or ISO code (e.g. `"english"` / `"en"`). */
+export interface Bm25Stemmer {
+  language: string
+}
+
+/**
+ * Configuration for an on-device BM25 model. Mirrors Qdrant REST `Bm25Config`
+ * so configs are portable between cloud and edge.
+ */
+export interface Bm25Config {
+  /** Term-frequency saturation. Higher means TF has more impact. Default `1.2`. */
+  k?: number
+  /** Document length normalization. `0` = none, `1` = full. Default `0.75`. */
+  b?: number
+  /** Expected average document length in tokens. Default `256`. */
+  avg_len?: number
+  /** Tokenizer type. Default `"word"`. */
+  tokenizer?: Bm25TokenizerType
+  /** Language for default stopwords & stemmer. Default `"english"`. */
+  language?: string
+  /** Lowercase tokens. Default `true`. */
+  lowercase?: boolean
+  /** Fold accented characters to ASCII (e.g. `"ação"` → `"acao"`). Default `false`. */
+  ascii_folding?: boolean
+  /** Stopwords filter; defaults are derived from `language`. */
+  stopwords?: Bm25Stopwords
+  /** Stemmer; defaults are derived from `language`. */
+  stemmer?: Bm25Stemmer
+  /** Discard tokens shorter than this. */
+  min_token_len?: number
+  /** Discard tokens longer than this. */
+  max_token_len?: number
+}
