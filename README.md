@@ -4,16 +4,25 @@
 [![license](https://img.shields.io/npm/l/react-native-qdrant-edge)](https://github.com/rust-dd/react-native-qdrant-edge/blob/main/LICENSE)
 [![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey)](https://github.com/rust-dd/react-native-qdrant-edge)
 
-Embedded vector search for React Native. Runs the [Qdrant](https://qdrant.tech) search engine **in-process** on the device -- no server, no network, fully offline.
+Embedded vector search for React Native. Runs the [Qdrant](https://qdrant.tech) search engine **in-process** on the device — no server, no network, fully offline.
 
-Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) (Rust) with [Nitro Modules](https://nitro.margelo.com) for near-zero JS-native overhead.
+Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) 0.7 (Rust) with [Nitro Modules](https://nitro.margelo.com) for near-zero JS↔native overhead.
 
 ## Features
 
-- HNSW-indexed vector search (dense, sparse, multi-vector)
-- Structured payload filtering (`must` / `should` / `must_not`)
-- Persistent storage -- survives app restarts
-- Snapshot interop with server Qdrant
+- **Dense, sparse, and multi-vector** HNSW search
+- **On-device BM25** sparse embedding (no embedding model to ship)
+- **Hybrid search** via prefetch + fusion (RRF, DBSF)
+- **Advanced query modes**: recommend, discover, context, MMR (diversity), order-by, sample
+- **Faceting** — count points per unique value of a payload key
+- **Snapshot interop** with cloud Qdrant
+- Structured payload filtering (`must` / `should` / `must_not` / `min_should`)
+- Filter-based payload updates (set / overwrite / delete / clear)
+- Dynamic vector slots (add / remove named vectors at runtime)
+- Runtime HNSW + optimizer config tuning
+- Mobile-tuned WAL options
+- UUID and u64 point IDs
+- Persistent storage — survives app restarts
 - Multiple independent shards
 - React hooks API
 - iOS and Android (Expo + bare RN)
@@ -24,19 +33,13 @@ Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) (Rust) with [Nit
 npm install react-native-qdrant-edge react-native-nitro-modules
 ```
 
-Prebuilt native binaries for iOS (arm64 + simulator) and Android (arm64 + x86_64) are included in the npm package -- no Rust toolchain required.
+Prebuilt native binaries for iOS (arm64 + simulator) and Android (arm64 + x86_64) are included — no Rust toolchain required.
 
 ### Expo
 
-Add the plugin to `app.json`:
-
 ```json
-{
-  "plugins": ["react-native-qdrant-edge"]
-}
+{ "plugins": ["react-native-qdrant-edge"] }
 ```
-
-Then run:
 
 ```sh
 npx expo run:ios
@@ -61,70 +64,104 @@ const shard = createShard('/path/to/shard', {
 
 // Insert points
 shard.upsert([
-  { id: 1, vector: [0.1, 0.2, ...], payload: { title: 'Hello' } },
-  { id: 2, vector: [0.3, 0.4, ...], payload: { title: 'World' } },
+  { id: 1, vector: [0.1, 0.2, /* … */], payload: { title: 'Hello' } },
+  { id: 2, vector: [0.3, 0.4, /* … */], payload: { title: 'World' } },
 ])
 
 // Search
 const results = shard.search({
-  vector: [0.1, 0.2, ...],
+  vector: [0.1, 0.2, /* … */],
   limit: 10,
   with_payload: true,
 })
-// [{ id: '1', score: 0.98, payload: { title: 'Hello' } }, ...]
 
-// Persist to disk
+// Persist + reload
 shard.flush()
 shard.close()
 
-// Reload from disk on next app launch
 const loaded = loadShard('/path/to/shard')
-const count = loaded.count()  // 2
-const info = loaded.info()    // { points_count: 2, segments_count: 1, ... }
+console.log(loaded.count())  // 2
 ```
 
 ## API
 
 ### `createShard(path, config)`
 
-Create a new shard at the given filesystem path.
+Create a new shard at the given filesystem path. The full config:
 
 ```ts
 const shard = createShard(path, {
   vectors: {
-    '': { size: 384, distance: 'Cosine' },        // default vector
-    'title': { size: 128, distance: 'Dot' },       // named vector
+    '':       { size: 384, distance: 'Cosine' },        // default vector
+    'title':  { size: 128, distance: 'Dot' },           // additional named dense
+    'image':  { size: 512, distance: 'Cosine', on_disk: true },
   },
   sparse_vectors: {
-    'keywords': { modifier: 'Idf' },               // sparse vector
+    'bm25': { modifier: 'Idf' },                         // BM25 sparse slot
   },
+  on_disk_payload: true,
+  hnsw_config:    { m: 16, ef_construct: 100 },
+  optimizers:     { default_segment_number: 2, indexing_threshold: 20_000 },
+  wal_options:    { segment_capacity: 4 * 1024 * 1024 }, // mobile-friendly 4 MiB
 })
 ```
 
 **Distance metrics:** `Cosine` | `Euclid` | `Dot` | `Manhattan`
 
+For a mobile-tuned WAL preset, see [`mobileWalDefaults()`](#mobile-wal-preset).
+
 ### `loadShard(path, config?)`
 
-Load an existing shard from disk. Config is optional -- if omitted, uses the stored config.
+Load an existing shard. Config is optional — if omitted, the stored config is used.
 
-### Shard methods
-
-#### Data
+### Shard data
 
 ```ts
-shard.upsert([{ id: 1, vector: [...], payload: { ... } }])
-shard.deletePoints([1, 2, 3])
-shard.setPayload(1, { key: 'value' })
-shard.deletePayload(1, ['key'])
+// Mixed dense + sparse + multi vectors per point are supported
+shard.upsert([
+  {
+    id: 'a3f1-...-uuid',
+    vector: {
+      dense: [0.1, 0.2, /* … */],
+      bm25:  { indices: [42, 7, 1003], values: [1.0, 1.0, 1.0] },
+    },
+    payload: { title: 'Mixed', category: 'docs' },
+  },
+])
+
+shard.deletePoints([1, 2, 'a3f1-...-uuid'])
+
+// Point IDs are u64 numbers OR UUID strings
+shard.updateVectors  // (single-point updates use upsert)
+
+// Payload — single point convenience
+shard.setPayload(1, { tag: 'new' })
+shard.overwritePayload(1, { tag: 'final' })
+shard.deletePayload(1, ['old_key'])
+
+// Payload — full power (filter / batch / nested key)
+shard.setPayloadOp({
+  payload: { archived: true },
+  filter:  { must: [{ key: 'created_at', range: { lt: 1_700_000_000 } }] },
+})
+shard.overwritePayloadOp({ payload, points: [1, 2, 3] })
+shard.deletePayloadOp({ keys: ['stale_key'], filter: { /* … */ } })
+shard.clearPayload({ filter: { must: [{ key: 'archived', match: { value: true } }] } })
+
+// Field indexes — required for filtering at scale
 shard.createFieldIndex('category', 'keyword')
+shard.createFieldIndex('price', 'float')
 shard.deleteFieldIndex('category')
 ```
 
-#### Search
+**Field index types:** `keyword` | `integer` | `float` | `geo` | `text` | `bool` | `datetime`
+
+### Search
 
 ```ts
 const results = shard.search({
-  vector: [0.1, 0.2, ...],
+  vector: [0.1, 0.2, /* … */],         // dense | { indices, values } | [[…]] (multi)
+  using: 'dense',                       // omit for the default vector
   limit: 10,
   offset: 0,
   with_payload: true,
@@ -134,44 +171,131 @@ const results = shard.search({
     must: [{ key: 'category', match: { value: 'electronics' } }],
   },
 })
+// [{ id: '1', score: 0.98, payload: { category: '…' } }, …]
 ```
 
-#### Query (advanced)
+### Hybrid query (dense + BM25 sparse)
+
+The query API mirrors the upstream `qdrant-client` REST shape. A prefetch tree fans out one search per vector type, then a fusion clause merges the rankings.
 
 ```ts
+import { createBm25 } from 'react-native-qdrant-edge'
+
+const bm25 = createBm25({ language: 'english' })
+const dense = await embedDense('quick brown fox')             // your dense model
+const sparse = bm25.embedQuery('quick brown fox')             // on-device BM25
+
 const results = shard.query({
-  vector: [0.1, 0.2, ...],
-  limit: 10,
-  filter: { ... },
-  fusion: 'rrf',  // reciprocal rank fusion
-})
-```
-
-#### Retrieval
-
-```ts
-const points = shard.retrieve([1, 2, 3], {
-  withPayload: true,
-  withVector: false,
-})
-
-const { points, next_offset } = shard.scroll({
-  limit: 100,
+  prefetch: [
+    { query: dense,  using: 'dense', limit: 100 },
+    { query: sparse, using: 'bm25',  limit: 100 },
+  ],
+  query:  { fusion: 'rrf' },          // or 'dbsf'
+  limit:  10,
   with_payload: true,
 })
 
-const count = shard.count({
-  must: [{ key: 'active', match: { value: true } }],
-})
+bm25.close()
 ```
 
-#### Lifecycle
+`fusion: { fusion: 'rrf', k: 60, weights: [2.0, 1.0] }` accepts an optional RRF `k` and per-source weights. Prefetches nest arbitrarily.
+
+### Advanced query modes
+
+All of these go in the `query` slot at the root or within a prefetch:
+
+```ts
+// Recommend (positive + negative examples)
+shard.query({ query: { recommend: { positive: [v1, v2], negative: [v3], strategy: 'best_score' } } })
+
+// Discover (target + positive/negative context pairs)
+shard.query({ query: { discover: { target: v, context: [{ positive: p1, negative: n1 }] } } })
+
+// Context (no target, just preference pairs)
+shard.query({ query: { context: [{ positive: p1, negative: n1 }] } })
+
+// Order by payload field
+shard.query({ query: { order_by: { key: 'created_at', direction: 'desc' } }, limit: 20 })
+
+// Random sample
+shard.query({ query: { sample: 'random' }, limit: 50 })
+
+// MMR — diversity-aware rerank (lambda 0 = full diversity, 1 = full relevance)
+shard.query({ query: { mmr: { vector: v, lambda: 0.5, candidates_limit: 100 } }, limit: 10 })
+```
+
+### Retrieve & scroll
+
+```ts
+const points = shard.retrieve([1, 2, 'uuid-…'], { withPayload: true, withVector: false })
+
+const { points, next_offset } = shard.scroll({ limit: 100, with_payload: true })
+
+const total = shard.count()
+const active = shard.count({ must: [{ key: 'active', match: { value: true } }] })
+```
+
+### Facet
+
+Count points per unique value of a payload key.
+
+```ts
+const { hits } = shard.facet({
+  key: 'category',
+  limit: 20,
+  filter: { must: [{ key: 'in_stock', match: { value: true } }] },
+  exact: true,
+})
+// [{ value: 'electronics', count: 42 }, { value: 'books', count: 17 }, …]
+```
+
+### Snapshot interop
+
+Treat the snapshot manifest as opaque — pass it back through `recoverPartialSnapshot` verbatim.
+
+```ts
+import { unpackSnapshot, recoverPartialSnapshot } from 'react-native-qdrant-edge'
+
+// Apply an external snapshot to an existing local shard
+unpackSnapshot('/downloads/snapshot.tar', '/tmp/snapshot-unpacked')
+
+const current  = shard.snapshotManifest()
+const incoming = JSON.parse(await fs.readTextFile('/tmp/snapshot-unpacked/manifest.json'))
+
+const merged = recoverPartialSnapshot(shard.path, current, '/tmp/snapshot-unpacked', incoming)
+```
+
+### Lifecycle
 
 ```ts
 shard.flush()       // persist to disk
-shard.optimize()    // merge segments, build HNSW index
+shard.optimize()    // merge segments, build HNSW indexes
 shard.info()        // { points_count, segments_count, indexed_vectors_count }
-shard.close()       // flush and release resources
+shard.close()       // flush + release
+```
+
+### Runtime config
+
+```ts
+shard.setHnswConfig({ m: 32, ef_construct: 200 })
+shard.setVectorHnswConfig('bm25', { full_scan_threshold: 5000 })
+shard.setOptimizersConfig({ indexing_threshold: 10_000, prevent_unoptimized: true })
+
+shard.createVectorName('caption', { dense: { size: 768, distance: 'Cosine' } })
+shard.deleteVectorName('legacy')
+```
+
+### Mobile WAL preset
+
+The upstream default WAL segment capacity is 32 MiB — wasteful on phones. Use the helper:
+
+```ts
+import { createShard, mobileWalDefaults } from 'react-native-qdrant-edge'
+
+const shard = createShard(path, {
+  vectors: { '': { size: 384, distance: 'Cosine' } },
+  wal_options: mobileWalDefaults(),     // 4 MiB segments, retain_closed: 1
+})
 ```
 
 ### Filtering
@@ -184,295 +308,141 @@ Filters follow the [Qdrant filter syntax](https://qdrant.tech/documentation/conc
     { key: 'price', range: { gte: 10, lte: 100 } },
     { key: 'category', match: { value: 'shoes' } },
   ],
-  must_not: [
+  should: [
     { key: 'brand', match: { any: ['Nike', 'Adidas'] } },
+  ],
+  must_not: [
+    { key: 'archived', match: { value: true } },
   ],
 }
 ```
 
-**Field index types:** `keyword` | `integer` | `float` | `geo` | `text` | `bool` | `datetime`
+### Error handling
 
-Create an index before filtering on a field for best performance:
+Every Shard / Bm25 method that fails throws a JS `Error` with a message of the form `"<operation> failed: <cause>"`. For structured access:
 
 ```ts
-shard.createFieldIndex('price', 'float')
-shard.createFieldIndex('category', 'keyword')
+import { asQdrantError } from 'react-native-qdrant-edge'
+
+try {
+  shard.upsert(points)
+} catch (err) {
+  const qe = asQdrantError(err)
+  console.log(qe.operation, qe.cause)   // e.g. 'upsert', 'invalid JSON path: …'
+}
 ```
 
-### React hooks
-
-#### `useShard`
+## React hooks
 
 ```ts
-import { useShard } from 'react-native-qdrant-edge'
+import {
+  useShard, useUpsert, useDelete,
+  useSearch, useQuery,
+  useRetrieve, useScroll, useCount, useShardInfo,
+  useBm25, useFacet, useSnapshotManifest,
+} from 'react-native-qdrant-edge'
 
 function NotesScreen() {
-  const { shard, isOpen, error, open, close } = useShard({
+  const { shard, open, close } = useShard({
     path: `${documentDir}/notes`,
     config: { vectors: { '': { size: 384, distance: 'Cosine' } } },
-    create: true,  // create new shard, or use false / omit to load existing
+    create: true,
+  })
+
+  const { bm25 } = useBm25({ language: 'english' })
+
+  const { results, search } = useSearch({
+    shard,
+    request: { vector: queryEmbedding, limit: 10, with_payload: true },
+    enabled: true,
   })
 
   useEffect(() => { open() }, [])
-  // Automatically closes the shard on unmount
+  // shard + bm25 are auto-closed/disposed on unmount
 
-  if (!isOpen) return <Text>Loading...</Text>
-
-  return <NotesList shard={shard} />
+  return <NotesList shard={shard} bm25={bm25} results={results} />
 }
 ```
 
-#### `useUpsert`
+Hybrid search via `useQuery`:
 
 ```ts
-import { useUpsert } from 'react-native-qdrant-edge'
-
-function AddNote({ shard }) {
-  const { upsert, error } = useUpsert(shard)
-
-  const handleSave = (embedding: number[], text: string) => {
-    upsert([{ id: Date.now(), vector: embedding, payload: { text } }])
-  }
-
-  return <Button onPress={() => handleSave(embedding, 'My note')} title="Save" />
-}
-```
-
-#### `useDelete`
-
-```ts
-import { useDelete } from 'react-native-qdrant-edge'
-
-function NoteItem({ shard, noteId }) {
-  const { deletePoints, error } = useDelete(shard)
-
-  return <Button onPress={() => deletePoints([noteId])} title="Delete" />
-}
-```
-
-#### `useSearch`
-
-```ts
-import { useSearch } from 'react-native-qdrant-edge'
-
-function SearchView({ shard, queryEmbedding }) {
-  const { results, error, search } = useSearch({
-    shard,
-    request: { vector: queryEmbedding, limit: 10, with_payload: true },
-    enabled: true,  // auto-search when request changes
-  })
-
-  // Or trigger manually:
-  const handleRefresh = () => search({ vector: newEmbedding, limit: 5 })
-
-  return results.map(r => <ResultCard key={r.id} point={r} />)
-}
-```
-
-#### `useQuery`
-
-Same as `useSearch` but uses the advanced query API with fusion support.
-
-```ts
-import { useQuery } from 'react-native-qdrant-edge'
-
-const { results, query } = useQuery({
+const { results } = useQuery({
   shard,
-  request: { vector: embedding, limit: 10, fusion: 'rrf' },
+  request: {
+    prefetch: [
+      { query: denseVec,  using: 'dense', limit: 100 },
+      { query: sparseVec, using: 'bm25',  limit: 100 },
+    ],
+    query: { fusion: 'rrf' },
+    limit: 10,
+    with_payload: true,
+  },
 })
 ```
 
-#### `useRetrieve`
+## Multiple shards
+
+Each shard is independent — separate storage, config, and indexes.
 
 ```ts
-import { useRetrieve } from 'react-native-qdrant-edge'
-
-function NoteDetail({ shard, noteIds }) {
-  const { points, retrieve } = useRetrieve(shard)
-
-  useEffect(() => {
-    retrieve(noteIds, { withPayload: true, withVector: false })
-  }, [noteIds])
-
-  return points.map(p => <Text key={p.id}>{p.payload?.text}</Text>)
-}
+const docs = createShard(`${dir}/docs`,   { vectors: { '': { size: 768, distance: 'Cosine' } } })
+const imgs = createShard(`${dir}/photos`, { vectors: { '': { size: 512, distance: 'Dot' } } })
 ```
 
-#### `useScroll`
+## Migration from 0.2.x
 
-```ts
-import { useScroll } from 'react-native-qdrant-edge'
+Mostly additive. The only TS-visible widening is:
 
-function AllNotes({ shard }) {
-  const { points, nextOffset, scroll } = useScroll(shard)
+- `Point.id` and IDs in `deletePoints` / `retrieve`: `number → number | string`. Existing numeric IDs still work.
+- `Point.vector` and `SearchRequest.vector`: accept sparse `{ indices, values }` and multi `[[…]]` in addition to dense.
+- `Shard.setPayload(pointId, payload)` gains an optional 3rd argument `key?: string` and accepts string IDs. Existing call sites are unchanged.
 
-  useEffect(() => { scroll({ limit: 50, with_payload: true }) }, [])
+Note one upstream behavior change: with `optimizers.prevent_unoptimized: true`, points written to unoptimized segments above `indexing_threshold` are persisted as **deferred** — they are excluded from reads/search until you call `shard.optimize()`. Previously this option blocked the write entirely.
 
-  const loadMore = () => {
-    if (nextOffset) scroll({ offset: nextOffset, limit: 50, with_payload: true })
-  }
+## Architecture
 
-  return (
-    <FlatList
-      data={points}
-      onEndReached={loadMore}
-      renderItem={({ item }) => <Text>{item.payload?.text}</Text>}
-    />
-  )
-}
+```
+TypeScript API
+  → Nitro HybridObject (C++, near-zero JS overhead)
+    → extern "C" FFI
+      → qdrant-edge 0.7 (Rust)
+        → HNSW index, WAL, segment storage, BM25 tokenizer
 ```
 
-#### `useCount`
-
-```ts
-import { useCount } from 'react-native-qdrant-edge'
-
-function Stats({ shard }) {
-  const { count, refresh } = useCount(shard)
-  // count auto-refreshes when shard changes
-
-  // Count with filter:
-  const activeCount = () => refresh({ must: [{ key: 'active', match: { value: true } }] })
-
-  return <Text>{count} points</Text>
-}
-```
-
-#### `useShardInfo`
-
-```ts
-import { useShardInfo } from 'react-native-qdrant-edge'
-
-function ShardStats({ shard }) {
-  const { info, refresh } = useShardInfo(shard)
-
-  return (
-    <Text>
-      {info?.points_count} points, {info?.segments_count} segments
-    </Text>
-  )
-}
-```
-
-#### Multiple shards with hooks
-
-```ts
-function App() {
-  const notes = useShard({
-    path: `${dataDir}/notes`,
-    config: { vectors: { '': { size: 384, distance: 'Cosine' } } },
-  })
-
-  const photos = useShard({
-    path: `${dataDir}/photos`,
-    config: { vectors: { '': { size: 512, distance: 'Dot' } } },
-  })
-
-  useEffect(() => {
-    notes.open()
-    photos.open()
-  }, [])
-
-  // Search across both
-  const noteResults = useSearch({
-    shard: notes.shard,
-    request: { vector: queryVec384, limit: 5, with_payload: true },
-  })
-
-  const photoResults = useSearch({
-    shard: photos.shard,
-    request: { vector: queryVec512, limit: 10, with_payload: true },
-  })
-
-  return (
-    <>
-      <Section title="Notes" results={noteResults.results} />
-      <Section title="Photos" results={photoResults.results} />
-    </>
-  )
-}
-```
-
-### Multiple shards
-
-Each shard is independent with its own storage, index, and config:
-
-```ts
-import { createShard, loadShard } from 'react-native-qdrant-edge'
-
-// Separate shards for different data types
-const documents = createShard(`${dataDir}/documents`, {
-  vectors: { '': { size: 768, distance: 'Cosine' } },
-})
-
-const images = createShard(`${dataDir}/images`, {
-  vectors: { '': { size: 512, distance: 'Dot' } },
-})
-
-// Insert into each independently
-documents.upsert([
-  { id: 1, vector: docEmbedding, payload: { title: 'Getting started', category: 'docs' } },
-  { id: 2, vector: docEmbedding2, payload: { title: 'API reference', category: 'docs' } },
-])
-
-images.upsert([
-  { id: 1, vector: imgEmbedding, payload: { filename: 'photo.jpg', album: 'vacation' } },
-])
-
-// Search each shard separately
-const docResults = documents.search({ vector: queryVec768, limit: 5, with_payload: true })
-const imgResults = images.search({ vector: queryVec512, limit: 10, with_payload: true })
-
-// Persist both
-documents.flush()
-images.flush()
-
-// Later, reload from disk
-const docs = loadShard(`${dataDir}/documents`)
-const imgs = loadShard(`${dataDir}/images`)
-```
+All operations are synchronous and run on the JS thread via JSI — no bridge, no serialization between JS and the C++ object. Vector and metadata payloads cross the FFI boundary as JSON; the JSON-parse overhead is negligible vs HNSW lookup for search, and measurable but acceptable for bulk upsert (raw `Float32Array` marshaling is on the roadmap — see Future work).
 
 ## Building from source
 
-Only needed if you're contributing or the prebuilt binaries don't cover your target.
+Only needed if you contribute, or the prebuilt binaries don't cover your target.
 
 ### Requirements
 
 - [Rust](https://rustup.rs)
 - Xcode (iOS)
 - Android NDK (Android)
+- `cbindgen` for header regen: `cargo install cbindgen`
 
 ### Build
 
 ```sh
-# iOS (device + simulator xcframework)
-npm run rust:build:ios
-
-# Android (arm64 + x86_64)
-npm run rust:build:android
-
-# Both
-npm run rust:build
+npm run rust:build:ios          # xcframework: device arm64 + simulator
+npm run rust:build:android      # arm64 + x86_64
+npm run rust:build              # both
 ```
 
-## Architecture
+After modifying any `.nitro.ts`, regenerate the bindings:
 
+```sh
+npm run specs
 ```
-TypeScript API
-  -> Nitro HybridObject (C++, near-zero overhead)
-    -> extern "C" FFI
-      -> qdrant-edge (Rust)
-        -> HNSW index, WAL, segment storage
-```
-
-All search operations are synchronous and run on the JS thread via JSI -- no bridge, no serialization overhead for the call itself. Vector data is passed as JSON strings across the FFI boundary and deserialized in Rust.
 
 ## Future work
 
-- **ArrayBuffer for vectors** -- pass vector data as raw `Float32Array` / `ArrayBuffer` instead of JSON strings across the FFI boundary. JSON parse overhead is negligible for search (HNSW lookup dominates), but matters for bulk upsert (1000+ points). Hybrid approach: ArrayBuffer for vectors, JSON for metadata (filter, payload, config).
-- **Async operations** -- offload heavy operations (optimize, bulk upsert) to a background thread via Nitro async methods.
-- **Snapshot import/export** -- expose `EdgeShard` snapshot API for syncing with server Qdrant.
-- **Named vector search helpers** -- typed API for multi-vector search (e.g. search text vectors and image vectors separately).
+- **ArrayBuffer / `Float32Array` for vectors** — skip JSON encoding for bulk upsert (HNSW search itself is already JSON-light).
+- **Async / background-thread operations** — offload `optimize`, bulk `upsert`, and `snapshotManifest` via Nitro async methods.
+- **Formula rescoring** — the upstream AST does not impl Deserialize; will need a typed expression builder API.
+- **gRPC client wrapper** — out of scope, but could ship alongside.
 
 ## License
 
