@@ -40,6 +40,20 @@ export default function Layout() {
         }}
       />
       <Tabs.Screen
+        name="facet"
+        options={{
+          title: 'Facet',
+          tabBarIcon: ({ color, size }) => <Ionicons name="stats-chart-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="mmr"
+        options={{
+          title: 'MMR',
+          tabBarIcon: ({ color, size }) => <Ionicons name="apps-outline" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="benchmark"
         options={{
           title: 'Benchmark',
