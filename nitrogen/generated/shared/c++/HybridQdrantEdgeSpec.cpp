@@ -17,6 +17,8 @@ namespace margelo::nitro::qdrantedge {
       prototype.registerHybridMethod("createShard", &HybridQdrantEdgeSpec::createShard);
       prototype.registerHybridMethod("loadShard", &HybridQdrantEdgeSpec::loadShard);
       prototype.registerHybridMethod("createBm25", &HybridQdrantEdgeSpec::createBm25);
+      prototype.registerHybridMethod("unpackSnapshot", &HybridQdrantEdgeSpec::unpackSnapshot);
+      prototype.registerHybridMethod("recoverPartialSnapshot", &HybridQdrantEdgeSpec::recoverPartialSnapshot);
     });
   }
 

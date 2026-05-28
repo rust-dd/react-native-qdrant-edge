@@ -186,6 +186,36 @@ export interface ShardInfo {
   indexed_vectors_count: number
 }
 
+export interface FacetRequest {
+  /** Payload key (JSON path) to facet on. */
+  key: string
+  /** Maximum number of unique values to return. Default `10`. */
+  limit?: number
+  /** Filter that points must satisfy before being counted. */
+  filter?: Filter
+  /** If true, count exact number of points (slower, default `false`). */
+  exact?: boolean
+}
+
+/** Facet value: keyword string, integer, UUID (canonical string), or bool. */
+export type FacetValue = string | number | boolean
+
+export interface FacetHit {
+  value: FacetValue
+  count: number
+}
+
+export interface FacetResponse {
+  hits: FacetHit[]
+}
+
+/**
+ * Opaque snapshot manifest. Pass to `recoverPartialSnapshot` verbatim — the
+ * shape mirrors qdrant's internal representation and is not stable across
+ * upstream versions; treat as a black box.
+ */
+export type SnapshotManifest = Record<string, unknown>
+
 /** BM25 tokenizer choice (Qdrant snake_case wire format). */
 export type Bm25TokenizerType = 'prefix' | 'whitespace' | 'word' | 'multilingual'
 

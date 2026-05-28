@@ -29,6 +29,8 @@ namespace margelo::nitro::qdrantedge {
       prototype.registerHybridMethod("scroll", &HybridQdrantEdgeShardSpec::scroll);
       prototype.registerHybridMethod("count", &HybridQdrantEdgeShardSpec::count);
       prototype.registerHybridMethod("info", &HybridQdrantEdgeShardSpec::info);
+      prototype.registerHybridMethod("facet", &HybridQdrantEdgeShardSpec::facet);
+      prototype.registerHybridMethod("snapshotManifest", &HybridQdrantEdgeShardSpec::snapshotManifest);
     });
   }
 

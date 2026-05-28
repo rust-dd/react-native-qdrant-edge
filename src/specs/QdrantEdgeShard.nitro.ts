@@ -90,4 +90,18 @@ export interface QdrantEdgeShard extends HybridObject<{
    * @returns JSON with shard metadata
    */
   info(): string
+
+  /**
+   * Count points per unique value of a payload key.
+   * @param requestJson - JSON FacetRequest: `{ key, limit?, filter?, exact? }`
+   * @returns JSON `{ hits: [{ value, count }] }`
+   */
+  facet(requestJson: string): string
+
+  /**
+   * Read this shard's snapshot manifest — pass to `recoverPartialSnapshot`
+   * when merging an external snapshot into this shard.
+   * @returns JSON manifest (opaque)
+   */
+  snapshotManifest(): string
 }

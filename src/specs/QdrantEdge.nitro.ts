@@ -29,4 +29,26 @@ export interface QdrantEdge extends HybridObject<{
    * @returns A QdrantEdgeBm25 model
    */
   createBm25(configJson: string): QdrantEdgeBm25
+
+  /**
+   * Unpack a snapshot archive into a directory.
+   * @param snapshotPath - Path to the snapshot file
+   * @param targetPath - Where to unpack
+   */
+  unpackSnapshot(snapshotPath: string, targetPath: string): void
+
+  /**
+   * Recover a shard from a partial snapshot. The supplied `shardPath`
+   * becomes the live shard after the merge.
+   * @param shardPath - Path to the existing shard
+   * @param currentManifestJson - This shard's current SnapshotManifest JSON
+   * @param snapshotPath - Path to the unpacked snapshot directory
+   * @param snapshotManifestJson - The snapshot's SnapshotManifest JSON
+   */
+  recoverPartialSnapshot(
+    shardPath: string,
+    currentManifestJson: string,
+    snapshotPath: string,
+    snapshotManifestJson: string
+  ): QdrantEdgeShard
 }

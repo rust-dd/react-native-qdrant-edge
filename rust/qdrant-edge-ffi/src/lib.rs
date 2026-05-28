@@ -7,6 +7,7 @@
 
 mod bm25;
 mod error;
+mod facet;
 mod ffi_strings;
 mod field_index;
 mod handle;
@@ -17,11 +18,13 @@ mod points;
 mod retrieve_scroll;
 mod search_query;
 mod serde_types;
+mod snapshot;
 
 pub use bm25::{
     QeBm25Handle, qe_bm25_create, qe_bm25_destroy, qe_bm25_embed_document, qe_bm25_embed_query,
 };
 pub use error::qe_last_error;
+pub use facet::qe_shard_facet;
 pub use ffi_strings::qe_free_string;
 pub use field_index::{qe_shard_create_field_index, qe_shard_delete_field_index};
 pub use handle::QeShardHandle;
@@ -33,3 +36,4 @@ pub use payload::{qe_shard_delete_payload, qe_shard_set_payload};
 pub use points::{qe_shard_delete_points, qe_shard_upsert};
 pub use retrieve_scroll::{qe_shard_count, qe_shard_retrieve, qe_shard_scroll};
 pub use search_query::{qe_shard_query, qe_shard_search};
+pub use snapshot::{qe_recover_partial_snapshot, qe_shard_snapshot_manifest, qe_unpack_snapshot};

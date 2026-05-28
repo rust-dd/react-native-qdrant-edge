@@ -63,6 +63,8 @@ namespace margelo::nitro::qdrantedge {
       virtual std::string scroll(const std::string& requestJson) = 0;
       virtual double count(const std::string& filterJson) = 0;
       virtual std::string info() = 0;
+      virtual std::string facet(const std::string& requestJson) = 0;
+      virtual std::string snapshotManifest() = 0;
 
     protected:
       // Hybrid Setup

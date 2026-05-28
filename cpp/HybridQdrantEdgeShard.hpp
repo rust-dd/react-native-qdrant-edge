@@ -128,6 +128,20 @@ public:
     return takeString(result);
   }
 
+  std::string facet(const std::string& requestJson) override {
+    ensureOpen();
+    char* result = qe_shard_facet(_handle, requestJson.c_str());
+    if (!result) throwLastError("facet");
+    return takeString(result);
+  }
+
+  std::string snapshotManifest() override {
+    ensureOpen();
+    char* result = qe_shard_snapshot_manifest(_handle);
+    if (!result) throwLastError("snapshotManifest");
+    return takeString(result);
+  }
+
 private:
   QeShardHandle* _handle;
 

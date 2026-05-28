@@ -52,6 +52,12 @@ char *qe_bm25_embed_document(struct QeBm25Handle *handle, const char *text);
 char *qe_last_error(void);
 
 /**
+ * Count points per unique value of the requested payload key.
+ * Returns JSON `{ hits: [{ value, count }] }`, or null on error.
+ */
+char *qe_shard_facet(struct QeShardHandle *handle, const char *request_json);
+
+/**
  * Free a string returned by any `qe_*` function.
  */
 void qe_free_string(char *ptr);
@@ -155,6 +161,26 @@ char *qe_shard_search(struct QeShardHandle *handle, const char *request_json);
  * or `null` on error. The caller must free the returned string with `qe_free_string`.
  */
 char *qe_shard_query(struct QeShardHandle *handle, const char *request_json);
+
+/**
+ * Read this shard's snapshot manifest. Returns JSON, or null on error.
+ */
+char *qe_shard_snapshot_manifest(struct QeShardHandle *handle);
+
+/**
+ * Unpack a snapshot archive into a directory. Returns 0 on success, -1 on error.
+ */
+int32_t qe_unpack_snapshot(const char *snapshot_path, const char *target_path);
+
+/**
+ * Recover a shard from a partial snapshot. Both manifests are JSON. Returns
+ * a new shard handle (the supplied `shard_path` becomes the live shard), or
+ * null on error.
+ */
+struct QeShardHandle *qe_recover_partial_snapshot(const char *shard_path,
+                                                  const char *current_manifest_json,
+                                                  const char *snapshot_path,
+                                                  const char *snapshot_manifest_json);
 
 #ifdef __cplusplus
 }  // extern "C"

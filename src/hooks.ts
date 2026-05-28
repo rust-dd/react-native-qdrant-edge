@@ -6,6 +6,8 @@ import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
   Bm25Config,
   EdgeConfig,
+  FacetRequest,
+  FacetResponse,
   FieldIndexType,
   Point,
   QueryRequest,
@@ -15,6 +17,7 @@ import type {
   ScrollResult,
   SearchRequest,
   ShardInfo,
+  SnapshotManifest,
   SparseVector,
 } from './types'
 
@@ -73,6 +76,12 @@ class ShardWrapper {
   }
   info(): ShardInfo {
     return JSON.parse(this._raw.info())
+  }
+  facet(request: FacetRequest): FacetResponse {
+    return JSON.parse(this._raw.facet(JSON.stringify(request)))
+  }
+  snapshotManifest(): SnapshotManifest {
+    return JSON.parse(this._raw.snapshotManifest())
   }
 }
 
@@ -468,6 +477,80 @@ export interface UseShardInfoResult {
   info: ShardInfo | null
   error: string | null
   refresh: () => void
+}
+
+export interface UseFacetResult {
+  result: FacetResponse | null
+  error: string | null
+  refresh: (request?: FacetRequest) => FacetResponse | null
+}
+
+/**
+ * Facet a payload key. Re-runs automatically when `request` changes; pass
+ * `null` to skip the initial run.
+ */
+export function useFacet(
+  shard: ShardWrapper | null,
+  request: FacetRequest | null
+): UseFacetResult {
+  const [result, setResult] = useState<FacetResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(
+    (override?: FacetRequest) => {
+      const req = override ?? request
+      if (!shard || !req) return null
+      try {
+        setError(null)
+        const r = shard.facet(req)
+        setResult(r)
+        return r
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+        return null
+      }
+    },
+    [shard, request]
+  )
+
+  useEffect(() => {
+    if (shard && request) refresh()
+  }, [shard, request, refresh])
+
+  return { result, error, refresh }
+}
+
+export interface UseSnapshotManifestResult {
+  manifest: SnapshotManifest | null
+  error: string | null
+  refresh: () => void
+}
+
+/** Read (and re-read on demand) the shard's snapshot manifest. */
+export function useSnapshotManifest(
+  shard: ShardWrapper | null
+): UseSnapshotManifestResult {
+  const [manifest, setManifest] = useState<SnapshotManifest | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const refresh = useCallback(() => {
+    if (!shard) {
+      setManifest(null)
+      return
+    }
+    try {
+      setError(null)
+      setManifest(shard.snapshotManifest())
+    } catch (e: any) {
+      setError(e.message ?? String(e))
+    }
+  }, [shard])
+
+  useEffect(() => {
+    if (shard) refresh()
+  }, [shard, refresh])
+
+  return { manifest, error, refresh }
 }
 
 export function useShardInfo(shard: ShardWrapper | null): UseShardInfoResult {

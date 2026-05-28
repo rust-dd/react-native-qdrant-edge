@@ -57,6 +57,8 @@ namespace margelo::nitro::qdrantedge {
       virtual std::shared_ptr<HybridQdrantEdgeShardSpec> createShard(const std::string& path, const std::string& configJson) = 0;
       virtual std::shared_ptr<HybridQdrantEdgeShardSpec> loadShard(const std::string& path, const std::string& configJson) = 0;
       virtual std::shared_ptr<HybridQdrantEdgeBm25Spec> createBm25(const std::string& configJson) = 0;
+      virtual void unpackSnapshot(const std::string& snapshotPath, const std::string& targetPath) = 0;
+      virtual std::shared_ptr<HybridQdrantEdgeShardSpec> recoverPartialSnapshot(const std::string& shardPath, const std::string& currentManifestJson, const std::string& snapshotPath, const std::string& snapshotManifestJson) = 0;
 
     protected:
       // Hybrid Setup

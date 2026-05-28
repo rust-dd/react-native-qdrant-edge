@@ -32,6 +32,30 @@ public:
     QeBm25Handle* handle = qe_bm25_create(configJson.c_str());
     return std::make_shared<HybridQdrantEdgeBm25>(handle);
   }
+
+  void unpackSnapshot(
+      const std::string& snapshotPath,
+      const std::string& targetPath) override {
+    if (qe_unpack_snapshot(snapshotPath.c_str(), targetPath.c_str()) < 0) {
+      char* err = qe_last_error();
+      std::string msg = err ? err : "unknown error";
+      if (err) qe_free_string(err);
+      throw std::runtime_error("unpackSnapshot failed: " + msg);
+    }
+  }
+
+  std::shared_ptr<HybridQdrantEdgeShardSpec> recoverPartialSnapshot(
+      const std::string& shardPath,
+      const std::string& currentManifestJson,
+      const std::string& snapshotPath,
+      const std::string& snapshotManifestJson) override {
+    QeShardHandle* handle = qe_recover_partial_snapshot(
+        shardPath.c_str(),
+        currentManifestJson.c_str(),
+        snapshotPath.c_str(),
+        snapshotManifestJson.c_str());
+    return std::make_shared<HybridQdrantEdgeShard>(handle);
+  }
 };
 
 } // namespace margelo::nitro::qdrantedge

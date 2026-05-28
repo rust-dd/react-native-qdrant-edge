@@ -5,6 +5,8 @@ import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
   Bm25Config,
   EdgeConfig,
+  FacetRequest,
+  FacetResponse,
   FieldIndexType,
   Point,
   QueryRequest,
@@ -14,6 +16,7 @@ import type {
   ScrollResult,
   SearchRequest,
   ShardInfo,
+  SnapshotManifest,
   SparseVector,
 } from './types'
 
@@ -26,6 +29,10 @@ export type {
   DenseVector,
   Distance,
   EdgeConfig,
+  FacetHit,
+  FacetRequest,
+  FacetResponse,
+  FacetValue,
   FieldIndexType,
   Filter,
   Fusion,
@@ -45,6 +52,7 @@ export type {
   ScrollResult,
   SearchRequest,
   ShardInfo,
+  SnapshotManifest,
   SparseVector,
   SparseVectorParams,
   VectorInput,
@@ -125,6 +133,17 @@ export class Shard {
   info(): ShardInfo {
     const json = this._raw.info()
     return JSON.parse(json) as ShardInfo
+  }
+
+  /** Count points per unique value of a payload key. */
+  facet(request: FacetRequest): FacetResponse {
+    const json = this._raw.facet(JSON.stringify(request))
+    return JSON.parse(json) as FacetResponse
+  }
+
+  /** Read this shard's snapshot manifest (opaque; pass to `recoverPartialSnapshot`). */
+  snapshotManifest(): SnapshotManifest {
+    return JSON.parse(this._raw.snapshotManifest()) as SnapshotManifest
   }
 }
 
@@ -210,6 +229,30 @@ export function createBm25(config?: Bm25Config): Bm25 {
   return new Bm25(raw)
 }
 
+/** Unpack a snapshot archive into a directory. */
+export function unpackSnapshot(snapshotPath: string, targetPath: string): void {
+  _factory.unpackSnapshot(snapshotPath, targetPath)
+}
+
+/**
+ * Recover a shard from a partial snapshot. The shard at `shardPath` is
+ * mutated in place; the returned `Shard` is opened against it.
+ */
+export function recoverPartialSnapshot(
+  shardPath: string,
+  currentManifest: SnapshotManifest,
+  snapshotPath: string,
+  snapshotManifest: SnapshotManifest
+): Shard {
+  const raw = _factory.recoverPartialSnapshot(
+    shardPath,
+    JSON.stringify(currentManifest),
+    snapshotPath,
+    JSON.stringify(snapshotManifest)
+  )
+  return new Shard(raw)
+}
+
 export { QdrantError, asQdrantError } from './errors'
 
 export {
@@ -223,6 +266,8 @@ export {
   useCount,
   useShardInfo,
   useBm25,
+  useFacet,
+  useSnapshotManifest,
 } from './hooks'
 export type {
   UseShardOptions,
@@ -238,4 +283,6 @@ export type {
   UseCountResult,
   UseShardInfoResult,
   UseBm25Result,
+  UseFacetResult,
+  UseSnapshotManifestResult,
 } from './hooks'
