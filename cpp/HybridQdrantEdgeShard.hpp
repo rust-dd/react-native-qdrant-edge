@@ -142,6 +142,41 @@ public:
     return takeString(result);
   }
 
+  void setHnswConfig(const std::string& configJson) override {
+    ensureOpen();
+    if (qe_shard_set_hnsw_config(_handle, configJson.c_str()) < 0) {
+      throwLastError("setHnswConfig");
+    }
+  }
+
+  void setVectorHnswConfig(const std::string& vectorName, const std::string& configJson) override {
+    ensureOpen();
+    if (qe_shard_set_vector_hnsw_config(_handle, vectorName.c_str(), configJson.c_str()) < 0) {
+      throwLastError("setVectorHnswConfig");
+    }
+  }
+
+  void setOptimizersConfig(const std::string& configJson) override {
+    ensureOpen();
+    if (qe_shard_set_optimizers_config(_handle, configJson.c_str()) < 0) {
+      throwLastError("setOptimizersConfig");
+    }
+  }
+
+  void createVectorName(const std::string& opJson) override {
+    ensureOpen();
+    if (qe_shard_create_vector_name(_handle, opJson.c_str()) < 0) {
+      throwLastError("createVectorName");
+    }
+  }
+
+  void deleteVectorName(const std::string& vectorName) override {
+    ensureOpen();
+    if (qe_shard_delete_vector_name(_handle, vectorName.c_str()) < 0) {
+      throwLastError("deleteVectorName");
+    }
+  }
+
 private:
   QeShardHandle* _handle;
 

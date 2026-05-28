@@ -8,6 +8,8 @@ import type {
   FacetRequest,
   FacetResponse,
   FieldIndexType,
+  HnswConfig,
+  OptimizersConfig,
   Point,
   QueryRequest,
   RetrievedPoint,
@@ -18,6 +20,9 @@ import type {
   ShardInfo,
   SnapshotManifest,
   SparseVector,
+  SparseVectorParams,
+  VectorParams,
+  WalOptions,
 } from './types'
 
 export type {
@@ -39,11 +44,16 @@ export type {
   DiscoverClause,
   Fusion,
   FusionClause,
+  HnswConfig,
   MatchCondition,
   MmrClause,
+  MultiVectorConfig,
+  OptimizersConfig,
   OrderByClause,
+  QuantizationConfig,
   RecommendClause,
   SampleClause,
+  WalOptions,
   MultiVector,
   Point,
   Prefetch,
@@ -150,6 +160,47 @@ export class Shard {
   /** Read this shard's snapshot manifest (opaque; pass to `recoverPartialSnapshot`). */
   snapshotManifest(): SnapshotManifest {
     return JSON.parse(this._raw.snapshotManifest()) as SnapshotManifest
+  }
+
+  /** Set the global HNSW config and persist. */
+  setHnswConfig(config: HnswConfig): void {
+    this._raw.setHnswConfig(JSON.stringify(config))
+  }
+
+  /** Set per-vector HNSW config (use `""` for the default vector name). */
+  setVectorHnswConfig(vectorName: string, config: HnswConfig): void {
+    this._raw.setVectorHnswConfig(vectorName, JSON.stringify(config))
+  }
+
+  /** Set the optimizer config and persist. */
+  setOptimizersConfig(config: OptimizersConfig): void {
+    this._raw.setOptimizersConfig(JSON.stringify(config))
+  }
+
+  /** Add a new named vector slot at runtime. */
+  createVectorName(
+    name: string,
+    config: { dense: VectorParams } | { sparse: SparseVectorParams }
+  ): void {
+    this._raw.createVectorName(JSON.stringify({ vector_name: name, config }))
+  }
+
+  /** Remove a named vector slot at runtime. */
+  deleteVectorName(name: string): void {
+    this._raw.deleteVectorName(name)
+  }
+}
+
+/**
+ * Recommended WAL settings for embedded/mobile deployments. The upstream
+ * default of 32 MiB per WAL segment is wasteful on phones; this preset
+ * uses 4 MiB segments and retains exactly one closed segment.
+ */
+export function mobileWalDefaults(): WalOptions {
+  return {
+    segment_capacity: 4 * 1024 * 1024,
+    segment_queue_len: 0,
+    retain_closed: 1,
   }
 }
 

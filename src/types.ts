@@ -5,6 +5,11 @@ export interface VectorParams {
   distance: Distance
   on_disk?: boolean
   datatype?: 'Float32' | 'Float16' | 'Uint8'
+  multivector_config?: MultiVectorConfig
+  /** Per-vector quantization override; falls back to `EdgeConfig.quantization_config`. */
+  quantization_config?: QuantizationConfig
+  /** Per-vector HNSW override; falls back to `EdgeConfig.hnsw_config`. */
+  hnsw_config?: HnswConfig
 }
 
 export interface SparseVectorParams {
@@ -14,10 +19,70 @@ export interface SparseVectorParams {
   datatype?: 'Float32' | 'Float16' | 'Uint8'
 }
 
+/** HNSW index hyperparameters. All fields optional; upstream defaults apply. */
+export interface HnswConfig {
+  m?: number
+  ef_construct?: number
+  full_scan_threshold?: number
+  max_indexing_threads?: number
+  on_disk?: boolean
+  payload_m?: number
+}
+
+/** Optimizer thresholds. All fields optional. */
+export interface OptimizersConfig {
+  deleted_threshold?: number
+  vacuum_min_vector_number?: number
+  default_segment_number?: number
+  max_segment_size?: number
+  max_optimization_threads?: number
+  indexing_threshold?: number
+  /**
+   * If true, points written to unoptimized segments above `indexing_threshold`
+   * are stored as deferred (persisted but excluded from read/search until the
+   * segments are optimized). Run `shard.optimize()` to make them visible.
+   */
+  prevent_unoptimized?: boolean
+}
+
+/**
+ * WAL (write-ahead log) options. Mobile deployments typically want a much
+ * smaller `segment_capacity` than the upstream default (32 MiB) — see
+ * `mobileWalDefaults()` for a recommended preset.
+ */
+export interface WalOptions {
+  /** Per-segment capacity in bytes. */
+  segment_capacity?: number
+  /** Queue length for in-flight writes. */
+  segment_queue_len?: number
+  /** Number of closed WAL segments to retain (must be > 0). */
+  retain_closed?: number
+}
+
+/** Multi-vector (ColBERT-style) comparator. */
+export interface MultiVectorConfig {
+  comparator: 'MaxSim'
+}
+
+/**
+ * Quantization configuration. Opaque from TS — the shape is one of
+ * `{ scalar: { ... } }`, `{ product: { ... } }`, or `{ binary: { ... } }`
+ * matching upstream Qdrant. Treat as a JSON blob.
+ */
+export type QuantizationConfig = Record<string, unknown>
+
 export interface EdgeConfig {
   vectors: Record<string, VectorParams>
   sparse_vectors?: Record<string, SparseVectorParams>
   on_disk_payload?: boolean
+  hnsw_config?: HnswConfig
+  quantization_config?: QuantizationConfig
+  optimizers?: OptimizersConfig
+  /**
+   * WAL options. Defaults to upstream (32 MiB segment_capacity), which is
+   * usually too large for mobile — set this for embedded deployments.
+   */
+  wal_options?: WalOptions
 }
 
 export type DenseVector = number[]

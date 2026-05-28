@@ -65,6 +65,11 @@ namespace margelo::nitro::qdrantedge {
       virtual std::string info() = 0;
       virtual std::string facet(const std::string& requestJson) = 0;
       virtual std::string snapshotManifest() = 0;
+      virtual void setHnswConfig(const std::string& configJson) = 0;
+      virtual void setVectorHnswConfig(const std::string& vectorName, const std::string& configJson) = 0;
+      virtual void setOptimizersConfig(const std::string& configJson) = 0;
+      virtual void createVectorName(const std::string& opJson) = 0;
+      virtual void deleteVectorName(const std::string& vectorName) = 0;
 
     protected:
       // Hybrid Setup

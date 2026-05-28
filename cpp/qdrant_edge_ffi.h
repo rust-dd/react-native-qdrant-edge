@@ -46,6 +46,35 @@ char *qe_bm25_embed_query(struct QeBm25Handle *handle, const char *text);
 char *qe_bm25_embed_document(struct QeBm25Handle *handle, const char *text);
 
 /**
+ * Set the global HNSW config and persist. Returns 0/-1.
+ */
+int32_t qe_shard_set_hnsw_config(struct QeShardHandle *handle, const char *config_json);
+
+/**
+ * Set the HNSW config for a single named vector and persist. Returns 0/-1.
+ */
+int32_t qe_shard_set_vector_hnsw_config(struct QeShardHandle *handle,
+                                        const char *vector_name,
+                                        const char *config_json);
+
+/**
+ * Set the optimizers config and persist. Returns 0/-1.
+ */
+int32_t qe_shard_set_optimizers_config(struct QeShardHandle *handle, const char *config_json);
+
+/**
+ * Add a new named vector slot. `op_json` is the `CreateVectorName` inner shape
+ * `{"vector_name": "...", "config": { "dense": { ... } | "sparse": { ... } }}`.
+ * Returns 0/-1.
+ */
+int32_t qe_shard_create_vector_name(struct QeShardHandle *handle, const char *op_json);
+
+/**
+ * Delete a named vector slot. Returns 0/-1.
+ */
+int32_t qe_shard_delete_vector_name(struct QeShardHandle *handle, const char *vector_name);
+
+/**
  * Get the last error message. Returns null if no error.
  * Caller must free the returned string with `qe_free_string`.
  */

@@ -6,6 +6,7 @@
 //! (`SearchRequest`, `QueryRequest`, …) don't implement `Deserialize` directly.
 
 mod bm25;
+mod config;
 mod error;
 mod facet;
 mod ffi_strings;
@@ -22,6 +23,10 @@ mod snapshot;
 
 pub use bm25::{
     QeBm25Handle, qe_bm25_create, qe_bm25_destroy, qe_bm25_embed_document, qe_bm25_embed_query,
+};
+pub use config::{
+    qe_shard_create_vector_name, qe_shard_delete_vector_name, qe_shard_set_hnsw_config,
+    qe_shard_set_optimizers_config, qe_shard_set_vector_hnsw_config,
 };
 pub use error::qe_last_error;
 pub use facet::qe_shard_facet;

@@ -31,6 +31,11 @@ namespace margelo::nitro::qdrantedge {
       prototype.registerHybridMethod("info", &HybridQdrantEdgeShardSpec::info);
       prototype.registerHybridMethod("facet", &HybridQdrantEdgeShardSpec::facet);
       prototype.registerHybridMethod("snapshotManifest", &HybridQdrantEdgeShardSpec::snapshotManifest);
+      prototype.registerHybridMethod("setHnswConfig", &HybridQdrantEdgeShardSpec::setHnswConfig);
+      prototype.registerHybridMethod("setVectorHnswConfig", &HybridQdrantEdgeShardSpec::setVectorHnswConfig);
+      prototype.registerHybridMethod("setOptimizersConfig", &HybridQdrantEdgeShardSpec::setOptimizersConfig);
+      prototype.registerHybridMethod("createVectorName", &HybridQdrantEdgeShardSpec::createVectorName);
+      prototype.registerHybridMethod("deleteVectorName", &HybridQdrantEdgeShardSpec::deleteVectorName);
     });
   }
 

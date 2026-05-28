@@ -104,4 +104,35 @@ export interface QdrantEdgeShard extends HybridObject<{
    * @returns JSON manifest (opaque)
    */
   snapshotManifest(): string
+
+  /**
+   * Set the global HNSW config and persist.
+   * @param configJson - JSON HnswConfig
+   */
+  setHnswConfig(configJson: string): void
+
+  /**
+   * Set the HNSW config for a single named vector and persist.
+   * @param vectorName - Name of the dense vector (use `""` for the default vector)
+   * @param configJson - JSON HnswConfig
+   */
+  setVectorHnswConfig(vectorName: string, configJson: string): void
+
+  /**
+   * Set the optimizer config and persist.
+   * @param configJson - JSON OptimizersConfig
+   */
+  setOptimizersConfig(configJson: string): void
+
+  /**
+   * Add a new named vector slot to this shard at runtime.
+   * @param opJson - JSON `{ vector_name, config: { dense } | { sparse } }`
+   */
+  createVectorName(opJson: string): void
+
+  /**
+   * Remove a named vector slot from this shard at runtime.
+   * @param vectorName - Name of the vector to remove
+   */
+  deleteVectorName(vectorName: string): void
 }
