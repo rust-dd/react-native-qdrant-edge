@@ -76,8 +76,46 @@ export interface SearchRequest {
   score_threshold?: number
 }
 
+/** Fusion strategy for combining prefetched result sets. */
+export type Fusion = 'rrf' | 'dbsf'
+
+/** Combine multiple prefetched result sets into a single ranked list. */
+export interface FusionClause {
+  fusion: Fusion
+  /** Reciprocal Rank Fusion `k` parameter. Defaults to `60`. RRF only. */
+  k?: number
+  /** Per-source weights aligned with the prefetch array. RRF only. */
+  weights?: number[]
+}
+
+/**
+ * The scoring clause at a query/prefetch level. A bare vector value is a
+ * nearest-neighbor search (shape determines dense / sparse / multi); a
+ * `{ fusion }` object combines prefetched sources.
+ *
+ * The advanced clauses (recommend, discover, context, MMR, formula, order_by,
+ * sample) ship in a later release.
+ */
+export type QueryClause = AnyVector | FusionClause
+
+export interface Prefetch {
+  /** Scoring clause for this prefetch level. */
+  query?: QueryClause
+  /** Named vector this prefetch operates on. */
+  using?: string
+  filter?: Filter
+  /** How many points this prefetch returns. */
+  limit?: number
+  score_threshold?: number
+  /** Nested prefetches; arbitrary tree depth. */
+  prefetch?: Prefetch | Prefetch[]
+}
+
 export interface QueryRequest {
-  vector?: number[]
+  /** Prefetched result sets to combine via `query: { fusion }`. */
+  prefetch?: Prefetch | Prefetch[]
+  /** Scoring clause at the root. */
+  query?: QueryClause
   using?: string
   filter?: Filter
   limit?: number
@@ -85,7 +123,10 @@ export interface QueryRequest {
   with_payload?: boolean
   with_vector?: boolean
   score_threshold?: number
-  fusion?: 'rrf' | 'dbsf'
+  /** @deprecated Use `query: vector` instead. Still accepted. */
+  vector?: number[]
+  /** @deprecated Use `query: { fusion }` instead. Still accepted. */
+  fusion?: Fusion
 }
 
 export interface ScrollRequest {

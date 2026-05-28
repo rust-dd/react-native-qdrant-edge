@@ -131,12 +131,150 @@ impl SearchInput {
     }
 }
 
-/// JSON-deserializable query request (since `ShardQueryRequest` doesn't impl Deserialize).
-/// Dense-only for now; the full prefetch + fusion + clause tree lands in a later commit.
+/// A single prefetch or an array of them. `prefetch: x` and `prefetch: [x, y]`
+/// both accepted; both flow into `ShardPrefetch::prefetches`.
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum PrefetchSpec {
+    One(Box<PrefetchInput>),
+    Many(Vec<PrefetchInput>),
+}
+
+impl PrefetchSpec {
+    fn into_vec(self) -> Vec<PrefetchInput> {
+        match self {
+            PrefetchSpec::One(p) => vec![*p],
+            PrefetchSpec::Many(v) => v,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct PrefetchInput {
+    #[serde(default)]
+    pub(crate) prefetch: Option<PrefetchSpec>,
+    #[serde(default)]
+    pub(crate) query: Option<QueryClauseInput>,
+    #[serde(default)]
+    pub(crate) using: Option<String>,
+    #[serde(default)]
+    pub(crate) filter: Option<Filter>,
+    #[serde(default = "default_limit")]
+    pub(crate) limit: usize,
+    #[serde(default)]
+    pub(crate) score_threshold: Option<f32>,
+}
+
+impl PrefetchInput {
+    fn into_prefetch(self) -> Result<qdrant_edge::Prefetch, String> {
+        let prefetches = build_prefetches(self.prefetch)?;
+        let query = match self.query {
+            Some(c) => Some(c.into_scoring_query(self.using)?),
+            None => None,
+        };
+        Ok(qdrant_edge::Prefetch {
+            prefetches,
+            query,
+            limit: self.limit,
+            params: None,
+            filter: self.filter,
+            score_threshold: self
+                .score_threshold
+                .map(qdrant_edge::external::ordered_float::OrderedFloat),
+        })
+    }
+}
+
+fn build_prefetches(spec: Option<PrefetchSpec>) -> Result<Vec<qdrant_edge::Prefetch>, String> {
+    let Some(spec) = spec else { return Ok(vec![]) };
+    spec.into_vec()
+        .into_iter()
+        .map(PrefetchInput::into_prefetch)
+        .collect()
+}
+
+/// The scoring clause at a query/prefetch level.
+///
+/// Untagged: a bare array/object is interpreted by shape — array of numbers /
+/// array of arrays / `{indices, values}` is `Nearest`, `{fusion: ...}` is `Fusion`.
+/// The Recommend/Discover/Context/OrderBy/Sample/MMR/Formula clauses land in
+/// a later commit (Recommend etc. need a `using`-aware shape).
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(crate) enum QueryClauseInput {
+    Nearest(AnyVectorInput),
+    Fusion(FusionClause),
+}
+
+impl QueryClauseInput {
+    fn into_scoring_query(
+        self,
+        default_using: Option<String>,
+    ) -> Result<qdrant_edge::ScoringQuery, String> {
+        match self {
+            QueryClauseInput::Nearest(any) => {
+                let internal = any.into_vector_internal()?;
+                let nq = qdrant_edge::NamedQuery {
+                    query: internal,
+                    using: default_using,
+                };
+                Ok(qdrant_edge::ScoringQuery::Vector(qdrant_edge::QueryEnum::Nearest(nq)))
+            }
+            QueryClauseInput::Fusion(f) => Ok(qdrant_edge::ScoringQuery::Fusion(f.into_fusion())),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub(crate) struct FusionClause {
+    pub(crate) fusion: FusionMode,
+    /// RRF only; ignored for DBSF. Default `60`.
+    #[serde(default = "default_rrf_k")]
+    pub(crate) k: usize,
+    /// RRF only; weights per prefetch source. `None` weights all sources equally.
+    #[serde(default)]
+    pub(crate) weights: Option<Vec<f32>>,
+}
+
+impl FusionClause {
+    fn into_fusion(self) -> qdrant_edge::Fusion {
+        match self.fusion {
+            FusionMode::Rrf => qdrant_edge::Fusion::Rrf {
+                k: self.k,
+                weights: self.weights.map(|ws| {
+                    ws.into_iter()
+                        .map(qdrant_edge::external::ordered_float::OrderedFloat)
+                        .collect()
+                }),
+            },
+            FusionMode::Dbsf => qdrant_edge::Fusion::Dbsf,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum FusionMode {
+    Rrf,
+    Dbsf,
+}
+
+fn default_rrf_k() -> usize {
+    60
+}
+
+/// JSON-deserializable query request. The shape of the public API mirrors
+/// upstream `ShardQueryRequest` (with the `qdrant-client` JSON conventions).
+///
+/// The legacy `vector` and `fusion` flat fields are still accepted so existing
+/// 0.2.x callers keep working; they are equivalent to `query: vector` and
+/// `query: { fusion: ... }` respectively.
 #[derive(Deserialize)]
 pub(crate) struct QueryInput {
     #[serde(default)]
-    pub(crate) vector: Option<Vec<f32>>,
+    pub(crate) prefetch: Option<PrefetchSpec>,
+    #[serde(default)]
+    pub(crate) query: Option<QueryClauseInput>,
     #[serde(default)]
     pub(crate) using: Option<String>,
     #[serde(default)]
@@ -151,23 +289,44 @@ pub(crate) struct QueryInput {
     pub(crate) with_vector: Option<bool>,
     #[serde(default)]
     pub(crate) score_threshold: Option<f32>,
-    /// Fusion mode: `"rrf"` or `"dbsf"`.
+    /// Legacy field equivalent to `query: vector` (dense only).
+    #[serde(default)]
+    pub(crate) vector: Option<Vec<f32>>,
+    /// Legacy field equivalent to `query: { fusion: ... }`. `"rrf"` | `"dbsf"`.
     #[serde(default)]
     pub(crate) fusion: Option<String>,
 }
 
 impl QueryInput {
     pub(crate) fn into_query_request(self) -> Result<qdrant_edge::QueryRequest, String> {
-        let scoring_query = if let Some(vec) = self.vector {
-            let query_enum = qdrant_edge::QueryEnum::Nearest(qdrant_edge::NamedQuery {
+        let QueryInput {
+            prefetch,
+            query,
+            using,
+            filter,
+            limit,
+            offset,
+            with_payload,
+            with_vector,
+            score_threshold,
+            vector,
+            fusion,
+        } = self;
+
+        let prefetches = build_prefetches(prefetch)?;
+
+        let scoring_query = if let Some(clause) = query {
+            Some(clause.into_scoring_query(using)?)
+        } else if let Some(vec) = vector {
+            let nq = qdrant_edge::NamedQuery {
                 query: qdrant_edge::VectorInternal::Dense(vec.into()),
-                using: self.using,
-            });
-            Some(qdrant_edge::ScoringQuery::Vector(query_enum))
-        } else if let Some(fusion) = &self.fusion {
-            let f = match fusion.as_str() {
+                using,
+            };
+            Some(qdrant_edge::ScoringQuery::Vector(qdrant_edge::QueryEnum::Nearest(nq)))
+        } else if let Some(fusion_str) = fusion {
+            let f = match fusion_str.as_str() {
                 "rrf" => qdrant_edge::Fusion::Rrf {
-                    k: 60,
+                    k: default_rrf_k(),
                     weights: None,
                 },
                 "dbsf" => qdrant_edge::Fusion::Dbsf,
@@ -178,24 +337,19 @@ impl QueryInput {
             None
         };
 
-        let score_threshold = self
-            .score_threshold
-            .map(qdrant_edge::external::ordered_float::OrderedFloat);
-
         Ok(qdrant_edge::QueryRequest {
-            prefetches: vec![],
+            prefetches,
             query: scoring_query,
-            filter: self.filter,
-            score_threshold,
-            limit: self.limit,
-            offset: self.offset,
+            filter,
+            score_threshold: score_threshold
+                .map(qdrant_edge::external::ordered_float::OrderedFloat),
+            limit,
+            offset,
             params: None,
-            with_vector: self
-                .with_vector
+            with_vector: with_vector
                 .map(qdrant_edge::WithVector::Bool)
                 .unwrap_or(qdrant_edge::WithVector::Bool(false)),
-            with_payload: self
-                .with_payload
+            with_payload: with_payload
                 .map(qdrant_edge::WithPayloadInterface::Bool)
                 .unwrap_or(qdrant_edge::WithPayloadInterface::Bool(true)),
         })
