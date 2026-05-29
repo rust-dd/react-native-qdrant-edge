@@ -2487,9 +2487,9 @@ dependencies = [
 
 [[package]]
 name = "qdrant-edge"
-version = "0.7.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "714dd06d7635624d53e5c6718081f914d83c76532c598747b5157c38169e2546"
+checksum = "c24d5bc81df8374330790995e984837660590275e236e1a623e7de00ee448cf3"
 dependencies = [
  "ahash",
  "aligned-vec",
@@ -2578,7 +2578,7 @@ dependencies = [
 
 [[package]]
 name = "qdrant-edge-ffi"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "log",
  "parking_lot",
