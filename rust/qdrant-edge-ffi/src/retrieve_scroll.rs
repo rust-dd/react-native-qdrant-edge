@@ -8,12 +8,12 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{CountRequest, Filter, PointId, ScrollRequest};
+use qdrant_edge::{CountRequest, Filter, PointId, RetrieveRequest};
 
 use crate::error::set_last_error;
 use crate::ffi_strings::{cstr_to_str, string_to_c};
 use crate::handle::{QeShardHandle, with_shard};
-use crate::serde_types::{RecordOutput, ScrollOutput};
+use crate::serde_types::{RecordOutput, ScrollInput, ScrollOutput};
 
 /// Retrieve specific points by IDs. Returns JSON, or `null` on error.
 #[unsafe(no_mangle)]
@@ -32,11 +32,14 @@ pub unsafe extern "C" fn qe_shard_retrieve(
         }
     };
 
-    let wp = Some(qdrant_edge::WithPayloadInterface::Bool(with_payload));
-    let wv = Some(qdrant_edge::WithVector::Bool(with_vector));
+    let req = RetrieveRequest {
+        point_ids,
+        with_payload: Some(qdrant_edge::WithPayloadInterface::Bool(with_payload)),
+        with_vector: Some(qdrant_edge::WithVector::Bool(with_vector)),
+    };
 
     let mut result_ptr: *mut c_char = ptr::null_mut();
-    with_shard(handle, |shard| match shard.retrieve(&point_ids, wp, wv) {
+    with_shard(handle, |shard| match shard.retrieve(req) {
         Ok(records) => {
             let output: Vec<RecordOutput> = records.into_iter().map(RecordOutput::from).collect();
             result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
@@ -55,7 +58,7 @@ pub unsafe extern "C" fn qe_shard_scroll(
     request_json: *const c_char,
 ) -> *mut c_char {
     let json_str = unsafe { cstr_to_str(request_json) };
-    let req: ScrollRequest = match serde_json::from_str(json_str) {
+    let req: ScrollInput = match serde_json::from_str(json_str) {
         Ok(r) => r,
         Err(e) => {
             set_last_error(format!("Failed to parse scroll request: {e}"));
@@ -64,7 +67,7 @@ pub unsafe extern "C" fn qe_shard_scroll(
     };
 
     let mut result_ptr: *mut c_char = ptr::null_mut();
-    with_shard(handle, |shard| match shard.scroll(req) {
+    with_shard(handle, |shard| match shard.scroll(req.into_scroll_request()) {
         Ok((records, next_offset)) => {
             let output = ScrollOutput {
                 points: records.into_iter().map(RecordOutput::from).collect(),

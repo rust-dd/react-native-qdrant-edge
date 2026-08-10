@@ -83,12 +83,15 @@ pub unsafe extern "C" fn qe_shard_close(handle: *mut QeShardHandle) {
     boxed.shard.lock().take();
 }
 
-/// Flush pending writes to disk.
+/// Flush pending writes to disk. Returns 0/-1.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn qe_shard_flush(handle: *mut QeShardHandle) {
-    with_shard(handle, |shard| {
-        shard.flush();
+pub unsafe extern "C" fn qe_shard_flush(handle: *mut QeShardHandle) -> i32 {
+    let mut result = -1i32;
+    with_shard(handle, |shard| match shard.flush() {
+        Ok(()) => result = 0,
+        Err(e) => set_last_error(format!("flush failed: {e}")),
     });
+    result
 }
 
 /// Run optimizers (merge segments, build HNSW indexes).

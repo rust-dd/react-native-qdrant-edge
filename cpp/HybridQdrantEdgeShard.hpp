@@ -28,7 +28,9 @@ public:
 
   void flush() override {
     ensureOpen();
-    qe_shard_flush(_handle);
+    if (qe_shard_flush(_handle) < 0) {
+      throwLastError("flush");
+    }
   }
 
   void optimize() override {

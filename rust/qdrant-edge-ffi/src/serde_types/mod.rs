@@ -10,4 +10,4 @@ mod vectors;
 
 pub(crate) use outputs::{RecordOutput, ScoredPointOutput, ScrollOutput, ShardInfoOutput};
 pub(crate) use point::PointInput;
-pub(crate) use requests::{QueryInput, SearchInput};
+pub(crate) use requests::{FacetInput, QueryInput, ScrollInput, SearchInput};

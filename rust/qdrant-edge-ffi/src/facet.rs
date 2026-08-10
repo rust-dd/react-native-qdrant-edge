@@ -3,14 +3,15 @@
 use std::os::raw::c_char;
 use std::ptr;
 
+use qdrant_edge::FacetValue;
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{FacetRequest, FacetValue};
 use serde::Serialize;
 use uuid::Uuid;
 
 use crate::error::set_last_error;
 use crate::ffi_strings::{cstr_to_str, string_to_c};
 use crate::handle::{QeShardHandle, with_shard};
+use crate::serde_types::FacetInput;
 
 /// Count points per unique value of the requested payload key.
 /// Returns JSON `{ hits: [{ value, count }] }`, or null on error.
@@ -20,7 +21,7 @@ pub unsafe extern "C" fn qe_shard_facet(
     request_json: *const c_char,
 ) -> *mut c_char {
     let json_str = unsafe { cstr_to_str(request_json) };
-    let req: FacetRequest = match serde_json::from_str(json_str) {
+    let req: FacetInput = match serde_json::from_str(json_str) {
         Ok(r) => r,
         Err(e) => {
             set_last_error(format!("Failed to parse facet request: {e}"));
@@ -29,7 +30,7 @@ pub unsafe extern "C" fn qe_shard_facet(
     };
 
     let mut result_ptr: *mut c_char = ptr::null_mut();
-    with_shard(handle, |shard| match shard.facet(req) {
+    with_shard(handle, |shard| match shard.facet(req.into_facet_request()) {
         Ok(response) => {
             let output = FacetResponseOutput {
                 hits: response

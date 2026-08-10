@@ -8,6 +8,7 @@ use std::ptr;
 
 use qdrant_edge::external::serde_json;
 
+use crate::error::set_last_error;
 use crate::ffi_strings::string_to_c;
 use crate::handle::{QeShardHandle, with_shard};
 use crate::serde_types::ShardInfoOutput;
@@ -16,14 +17,18 @@ use crate::serde_types::ShardInfoOutput;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_shard_info(handle: *mut QeShardHandle) -> *mut c_char {
     let mut result_ptr: *mut c_char = ptr::null_mut();
-    with_shard(handle, |shard| {
-        let info = shard.info();
-        let output = ShardInfoOutput {
-            segments_count: info.segments_count,
-            points_count: info.points_count,
-            indexed_vectors_count: info.indexed_vectors_count,
-        };
-        result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
+    with_shard(handle, |shard| match shard.info() {
+        Ok(info) => {
+            let output = ShardInfoOutput {
+                segments_count: info.segments_count,
+                points_count: info.points_count,
+                indexed_vectors_count: info.indexed_vectors_count,
+            };
+            result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
+        }
+        Err(e) => {
+            set_last_error(format!("info failed: {e}"));
+        }
     });
     result_ptr
 }

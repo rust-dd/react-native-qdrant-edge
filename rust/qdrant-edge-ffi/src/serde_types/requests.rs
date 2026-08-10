@@ -98,9 +98,7 @@ impl PrefetchInput {
             limit: self.limit,
             params: None,
             filter: self.filter,
-            score_threshold: self
-                .score_threshold
-                .map(qdrant_edge::external::ordered_float::OrderedFloat),
+            score_threshold: self.score_threshold,
         })
     }
 }
@@ -111,6 +109,63 @@ fn build_prefetches(spec: Option<PrefetchSpec>) -> Result<Vec<qdrant_edge::Prefe
         .into_iter()
         .map(PrefetchInput::into_prefetch)
         .collect()
+}
+
+/// JSON-deserializable scroll request; mirrors the serde shape upstream
+/// `ScrollRequestInternal` had before `ScrollRequest` lost `Deserialize`.
+#[derive(Deserialize)]
+pub(crate) struct ScrollInput {
+    #[serde(default)]
+    pub(crate) offset: Option<qdrant_edge::PointId>,
+    #[serde(default)]
+    pub(crate) limit: Option<usize>,
+    #[serde(default)]
+    pub(crate) filter: Option<Filter>,
+    #[serde(default)]
+    pub(crate) with_payload: Option<qdrant_edge::WithPayloadInterface>,
+    #[serde(default, alias = "with_vectors")]
+    pub(crate) with_vector: Option<qdrant_edge::WithVector>,
+    #[serde(default)]
+    pub(crate) order_by: Option<qdrant_edge::OrderByInterface>,
+}
+
+impl ScrollInput {
+    pub(crate) fn into_scroll_request(self) -> qdrant_edge::ScrollRequest {
+        qdrant_edge::ScrollRequest {
+            offset: self.offset,
+            limit: self.limit,
+            filter: self.filter,
+            with_payload: self.with_payload,
+            with_vector: self
+                .with_vector
+                .unwrap_or(qdrant_edge::WithVector::Bool(false)),
+            order_by: self.order_by,
+        }
+    }
+}
+
+/// JSON-deserializable facet request; mirrors the serde shape upstream
+/// `FacetRequestInternal` had before `FacetRequest` lost `Deserialize`.
+#[derive(Deserialize)]
+pub(crate) struct FacetInput {
+    pub(crate) key: qdrant_edge::JsonPath,
+    #[serde(default = "default_limit")]
+    pub(crate) limit: usize,
+    #[serde(default)]
+    pub(crate) filter: Option<Filter>,
+    #[serde(default)]
+    pub(crate) exact: bool,
+}
+
+impl FacetInput {
+    pub(crate) fn into_facet_request(self) -> qdrant_edge::FacetRequest {
+        qdrant_edge::FacetRequest {
+            key: self.key,
+            limit: self.limit,
+            filter: self.filter,
+            exact: self.exact,
+        }
+    }
 }
 
 /// JSON-deserializable query request. The shape of the public API mirrors
@@ -191,8 +246,7 @@ impl QueryInput {
             prefetches,
             query: scoring_query,
             filter,
-            score_threshold: score_threshold
-                .map(qdrant_edge::external::ordered_float::OrderedFloat),
+            score_threshold,
             limit,
             offset,
             params: None,

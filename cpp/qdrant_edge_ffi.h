@@ -125,9 +125,9 @@ struct QeShardHandle *qe_shard_load(const char *path, const char *config_json);
 void qe_shard_close(struct QeShardHandle *handle);
 
 /**
- * Flush pending writes to disk.
+ * Flush pending writes to disk. Returns 0/-1.
  */
-void qe_shard_flush(struct QeShardHandle *handle);
+int32_t qe_shard_flush(struct QeShardHandle *handle);
 
 /**
  * Run optimizers (merge segments, build HNSW indexes).

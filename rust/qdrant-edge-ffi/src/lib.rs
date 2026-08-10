@@ -20,6 +20,8 @@ mod retrieve_scroll;
 mod search_query;
 mod serde_types;
 mod snapshot;
+#[cfg(test)]
+mod tests;
 
 pub use bm25::{
     QeBm25Handle, qe_bm25_create, qe_bm25_destroy, qe_bm25_embed_document, qe_bm25_embed_query,
