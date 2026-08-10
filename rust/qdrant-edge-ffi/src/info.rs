@@ -23,6 +23,8 @@ pub unsafe extern "C" fn qe_shard_info(handle: *mut QeShardHandle) -> *mut c_cha
                 segments_count: info.segments_count,
                 points_count: info.points_count,
                 indexed_vectors_count: info.indexed_vectors_count,
+                payload_schema: serde_json::to_value(&info.payload_schema)
+                    .unwrap_or_default(),
             };
             result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
         }

@@ -360,10 +360,22 @@ export type FieldIndexType =
   | 'bool'
   | 'datetime'
 
+/** Index info for one payload field, as reported by `shard.info()`. */
+export interface PayloadIndexInfo {
+  /** Indexed data type, e.g. `'keyword'`, `'integer'`, `'text'`. */
+  data_type: string
+  /** Index parameters, when the field was indexed with explicit params. */
+  params?: Record<string, unknown>
+  /** Number of points indexed under this field. */
+  points: number
+}
+
 export interface ShardInfo {
   segments_count: number
   points_count: number
   indexed_vectors_count: number
+  /** Schema of indexed payload fields, keyed by field path. */
+  payload_schema: Record<string, PayloadIndexInfo>
 }
 
 export interface FacetRequest {

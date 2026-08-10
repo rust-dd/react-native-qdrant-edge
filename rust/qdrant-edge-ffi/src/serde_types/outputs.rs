@@ -76,4 +76,7 @@ pub(crate) struct ShardInfoOutput {
     pub(crate) segments_count: usize,
     pub(crate) points_count: usize,
     pub(crate) indexed_vectors_count: usize,
+    /// Indexed payload fields keyed by field path; values are upstream
+    /// `PayloadIndexInfo` (`data_type`, optional `params`, `points`).
+    pub(crate) payload_schema: serde_json::Value,
 }

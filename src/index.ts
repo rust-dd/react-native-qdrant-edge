@@ -63,6 +63,7 @@ export type {
   MultiVectorConfig,
   OptimizersConfig,
   OrderByClause,
+  PayloadIndexInfo,
   PointId,
   QuantizationConfig,
   RecommendClause,

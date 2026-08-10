@@ -141,6 +141,7 @@ fn scroll_count_facet_info_round_trip() {
     let info = take_json(unsafe { qe_shard_info(handle) });
     assert_eq!(info["points_count"], 3);
     assert!(info["segments_count"].as_u64().unwrap() >= 1);
+    assert_eq!(info["payload_schema"]["category"]["data_type"], "keyword");
 
     assert_eq!(unsafe { qe_shard_flush(handle) }, 0);
     unsafe { qe_shard_close(handle) };
