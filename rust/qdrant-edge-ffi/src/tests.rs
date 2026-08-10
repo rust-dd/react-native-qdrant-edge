@@ -91,6 +91,12 @@ fn search_and_query_round_trip() {
     assert_eq!(hits[1]["id"], "3");
     assert_eq!(hits[0]["payload"]["category"], "alpha");
 
+    let bare = cstr(&json!({ "vector": [1.0, 0.0, 0.0, 0.0], "limit": 1 }).to_string());
+    let results = take_json(unsafe { qe_shard_search(handle, bare.as_ptr()) });
+    let bare_hit = &results.as_array().unwrap()[0];
+    assert!(bare_hit.get("payload").is_none(), "search defaults to no payload");
+    assert!(bare_hit.get("vector").is_none(), "search defaults to no vector");
+
     let req = cstr(&json!({ "query": [0.0, 1.0, 0.0, 0.0], "limit": 1 }).to_string());
     let results = take_json(unsafe { qe_shard_query(handle, req.as_ptr()) });
     assert_eq!(results.as_array().unwrap()[0]["id"], "2");

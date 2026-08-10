@@ -31,22 +31,27 @@ pub(crate) struct SearchInput {
 }
 
 impl SearchInput {
-    pub(crate) fn into_search_request(self) -> Result<qdrant_edge::SearchRequest, String> {
+    /// Upstream deprecated `EdgeShardRead::search` in favor of `query`, so a
+    /// search request converts into a nearest-neighbor `QueryRequest`. The
+    /// legacy search defaults are preserved: payload and vector both excluded
+    /// unless requested.
+    pub(crate) fn into_query_request(self) -> Result<qdrant_edge::QueryRequest, String> {
         let query = qdrant_edge::QueryEnum::Nearest(qdrant_edge::NamedQuery {
             query: self.vector.into_vector_internal()?,
             using: self.using,
         });
-        Ok(qdrant_edge::SearchRequest {
-            query,
+        Ok(qdrant_edge::QueryRequest {
+            prefetches: Vec::new(),
+            query: Some(qdrant_edge::ScoringQuery::Vector(query)),
             filter: self.filter,
-            params: None,
+            score_threshold: self.score_threshold,
             limit: self.limit,
             offset: self.offset,
-            with_payload: self
-                .with_payload
-                .map(qdrant_edge::WithPayloadInterface::Bool),
-            with_vector: self.with_vector.map(qdrant_edge::WithVector::Bool),
-            score_threshold: self.score_threshold,
+            params: None,
+            with_vector: qdrant_edge::WithVector::Bool(self.with_vector.unwrap_or(false)),
+            with_payload: qdrant_edge::WithPayloadInterface::Bool(
+                self.with_payload.unwrap_or(false),
+            ),
         })
     }
 }

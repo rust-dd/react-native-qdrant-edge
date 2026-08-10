@@ -29,7 +29,9 @@ pub unsafe extern "C" fn qe_shard_search(
         }
     };
 
-    let search_req = match req.into_search_request() {
+    // `EdgeShard::search` is deprecated upstream; the search entry point is a
+    // thin nearest-neighbor `query` with the legacy search defaults.
+    let search_req = match req.into_query_request() {
         Ok(r) => r,
         Err(e) => {
             set_last_error(format!("Failed to build search request: {e}"));
@@ -38,19 +40,14 @@ pub unsafe extern "C" fn qe_shard_search(
     };
 
     let mut result_ptr: *mut c_char = ptr::null_mut();
-    with_shard(handle, |shard| {
-        // `EdgeShard::search` is deprecated upstream in favor of `query`; we
-        // keep the entry point and route through it in a later commit.
-        #[allow(deprecated)]
-        match shard.search(search_req) {
-            Ok(results) => {
-                let output: Vec<ScoredPointOutput> =
-                    results.into_iter().map(ScoredPointOutput::from).collect();
-                result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
-            }
-            Err(e) => {
-                set_last_error(format!("search failed: {e}"));
-            }
+    with_shard(handle, |shard| match shard.query(search_req) {
+        Ok(results) => {
+            let output: Vec<ScoredPointOutput> =
+                results.into_iter().map(ScoredPointOutput::from).collect();
+            result_ptr = string_to_c(serde_json::to_string(&output).unwrap_or_default());
+        }
+        Err(e) => {
+            set_last_error(format!("search failed: {e}"));
         }
     });
     result_ptr
