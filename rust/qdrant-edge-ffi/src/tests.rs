@@ -147,6 +147,46 @@ fn scroll_count_facet_info_round_trip() {
 }
 
 #[test]
+fn search_params_pass_through() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+    upsert_fixture_points(handle);
+
+    let req = cstr(
+        &json!({
+            "vector": [1.0, 0.0, 0.0, 0.0],
+            "limit": 2,
+            "params": { "exact": true, "hnsw_ef": 64 },
+        })
+        .to_string(),
+    );
+    let results = take_json(unsafe { qe_shard_search(handle, req.as_ptr()) });
+    assert_eq!(results.as_array().unwrap()[0]["id"], "1");
+
+    let sparse_points = json!([
+        { "id": 10, "vector": { "bm25": { "indices": [7, 42], "values": [1.0, 1.0] } }, "payload": { "category": "sparse" } },
+        { "id": 11, "vector": { "bm25": { "indices": [42], "values": [1.0] } }, "payload": { "category": "sparse" } },
+    ]);
+    let points_json = cstr(&sparse_points.to_string());
+    assert_eq!(unsafe { qe_shard_upsert(handle, points_json.as_ptr()) }, 0);
+
+    // `idf` is only valid against a sparse vector with the IDF modifier.
+    let req = cstr(
+        &json!({
+            "query": { "indices": [7], "values": [1.0] },
+            "using": "bm25",
+            "limit": 1,
+            "params": { "indexed_only": false, "idf": "global" },
+        })
+        .to_string(),
+    );
+    let results = take_json(unsafe { qe_shard_query(handle, req.as_ptr()) });
+    assert_eq!(results.as_array().unwrap()[0]["id"], "10");
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
 fn retrieve_by_ids_preserves_order_and_payload() {
     let dir = TempShardDir::new();
     let handle = create_test_shard(&dir);

@@ -148,6 +148,46 @@ export interface RetrievedPoint {
   vector?: ResultVector | ResultVectorMap
 }
 
+/**
+ * IDF corpus selector for sparse vectors with the `idf` modifier.
+ * `'global'` (or omitting) uses collection-wide statistics; `{ corpus }`
+ * computes document counts and per-term frequencies over the points matching
+ * the corpus filter only.
+ */
+export type IdfParams = 'global' | { corpus: Filter }
+
+/** Quantization behavior at search time. */
+export interface QuantizationSearchParams {
+  /** Skip quantized vectors entirely. Default `false`. */
+  ignore?: boolean
+  /** Re-score top-k with original vectors. Unset lets the engine decide. */
+  rescore?: boolean
+  /** Preselection factor over `limit` before re-scoring. Default `1.0`. */
+  oversampling?: number
+}
+
+/** ACORN filtered-search tuning. */
+export interface AcornSearchParams {
+  /** Allow ACORN for HNSW searches with low-selectivity filters. */
+  enable?: boolean
+  /** Skip ACORN when estimated filter selectivity exceeds this (0–1). */
+  max_selectivity?: number
+}
+
+/** Additional search-time parameters (`params` on search/query/prefetch). */
+export interface SearchParams {
+  /** HNSW beam size. Larger = more accurate, slower. */
+  hnsw_ef?: number
+  /** Exact (non-approximate) search. Slow but precise. Default `false`. */
+  exact?: boolean
+  quantization?: QuantizationSearchParams
+  /** Search only indexed/small segments to avoid slow un-indexed scans. */
+  indexed_only?: boolean
+  acorn?: AcornSearchParams
+  /** IDF statistics population; sparse vectors with the `idf` modifier only. */
+  idf?: IdfParams
+}
+
 export interface SearchRequest {
   vector: AnyVector
   using?: string
@@ -157,6 +197,7 @@ export interface SearchRequest {
   with_payload?: boolean
   with_vector?: boolean
   score_threshold?: number
+  params?: SearchParams
 }
 
 /** Fusion strategy for combining prefetched result sets. */
@@ -244,6 +285,7 @@ export interface Prefetch {
   /** How many points this prefetch returns. */
   limit?: number
   score_threshold?: number
+  params?: SearchParams
   /** Nested prefetches; arbitrary tree depth. */
   prefetch?: Prefetch | Prefetch[]
 }
@@ -260,6 +302,7 @@ export interface QueryRequest {
   with_payload?: boolean
   with_vector?: boolean
   score_threshold?: number
+  params?: SearchParams
   /** @deprecated Use `query: vector` instead. Still accepted. */
   vector?: number[]
   /** @deprecated Use `query: { fusion }` instead. Still accepted. */

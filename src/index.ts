@@ -30,6 +30,7 @@ import type {
 } from './types'
 
 export type {
+  AcornSearchParams,
   AnyVector,
   Bm25Config,
   Bm25Stemmer,
@@ -38,6 +39,9 @@ export type {
   DenseVector,
   Distance,
   EdgeConfig,
+  IdfParams,
+  QuantizationSearchParams,
+  SearchParams,
   FacetHit,
   FacetRequest,
   FacetResponse,

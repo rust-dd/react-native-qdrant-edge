@@ -28,6 +28,8 @@ pub(crate) struct SearchInput {
     pub(crate) with_vector: Option<bool>,
     #[serde(default)]
     pub(crate) score_threshold: Option<f32>,
+    #[serde(default)]
+    pub(crate) params: Option<qdrant_edge::SearchParams>,
 }
 
 impl SearchInput {
@@ -47,7 +49,7 @@ impl SearchInput {
             score_threshold: self.score_threshold,
             limit: self.limit,
             offset: self.offset,
-            params: None,
+            params: self.params,
             with_vector: qdrant_edge::WithVector::Bool(self.with_vector.unwrap_or(false)),
             with_payload: qdrant_edge::WithPayloadInterface::Bool(
                 self.with_payload.unwrap_or(false),
@@ -88,6 +90,8 @@ pub(crate) struct PrefetchInput {
     pub(crate) limit: usize,
     #[serde(default)]
     pub(crate) score_threshold: Option<f32>,
+    #[serde(default)]
+    pub(crate) params: Option<qdrant_edge::SearchParams>,
 }
 
 impl PrefetchInput {
@@ -101,7 +105,7 @@ impl PrefetchInput {
             prefetches,
             query,
             limit: self.limit,
-            params: None,
+            params: self.params,
             filter: self.filter,
             score_threshold: self.score_threshold,
         })
@@ -199,6 +203,8 @@ pub(crate) struct QueryInput {
     pub(crate) with_vector: Option<bool>,
     #[serde(default)]
     pub(crate) score_threshold: Option<f32>,
+    #[serde(default)]
+    pub(crate) params: Option<qdrant_edge::SearchParams>,
     /// Legacy field equivalent to `query: vector` (dense only).
     #[serde(default)]
     pub(crate) vector: Option<Vec<f32>>,
@@ -219,6 +225,7 @@ impl QueryInput {
             with_payload,
             with_vector,
             score_threshold,
+            params,
             vector,
             fusion,
         } = self;
@@ -254,7 +261,7 @@ impl QueryInput {
             score_threshold,
             limit,
             offset,
-            params: None,
+            params,
             with_vector: with_vector
                 .map(qdrant_edge::WithVector::Bool)
                 .unwrap_or(qdrant_edge::WithVector::Bool(false)),
