@@ -188,6 +188,53 @@ fn search_params_pass_through() {
 }
 
 #[test]
+fn new_filter_conditions_and_ordered_scroll() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+    upsert_fixture_points(handle);
+
+    let prefix = cstr(
+        &json!({ "must": [{ "key": "category", "match": { "prefix": "al" } }] }).to_string(),
+    );
+    assert_eq!(unsafe { qe_shard_count(handle, prefix.as_ptr()) }, 2);
+
+    let has_vector = cstr(&json!({ "must": [{ "has_vector": "" }] }).to_string());
+    assert_eq!(unsafe { qe_shard_count(handle, has_vector.as_ptr()) }, 3);
+
+    let slice_union: i64 = (0..2)
+        .map(|index| {
+            let filter = cstr(
+                &json!({ "must": [{ "slice": { "total": 2, "index": index } }] }).to_string(),
+            );
+            unsafe { qe_shard_count(handle, filter.as_ptr()) }
+        })
+        .sum();
+    assert_eq!(slice_union, 3, "disjoint slices cover every point exactly once");
+
+    let field = cstr("rank");
+    let field_type = cstr("integer");
+    assert_eq!(
+        unsafe { qe_shard_create_field_index(handle, field.as_ptr(), field_type.as_ptr()) },
+        0
+    );
+    let req = cstr(
+        &json!({
+            "limit": 10,
+            "with_payload": true,
+            "order_by": { "key": "rank", "direction": "desc" },
+        })
+        .to_string(),
+    );
+    let scroll = take_json(unsafe { qe_shard_scroll(handle, req.as_ptr()) });
+    let points = scroll["points"].as_array().unwrap();
+    assert_eq!(points.len(), 3);
+    assert_eq!(points[0]["payload"]["rank"], 3);
+    assert_eq!(points[2]["payload"]["rank"], 1);
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
 fn query_groups_by_payload_field() {
     let dir = TempShardDir::new();
     let handle = create_test_shard(&dir);

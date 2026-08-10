@@ -83,6 +83,17 @@ export interface EdgeConfig {
    * usually too large for mobile — set this for embedded deployments.
    */
   wal_options?: WalOptions
+  /**
+   * Threads in the shard's search pool: per-segment reads (search, scroll,
+   * count, facet) and segment loads run in parallel on it. Defaults to a
+   * CPU-derived count; set `1` to keep search single-threaded.
+   */
+  max_search_threads?: number
+  /**
+   * Pin every search-pool thread to this CPU core (best-effort). Bounds the
+   * shard's search compute to one core while keeping IO overlap.
+   */
+  search_pool_core?: number
 }
 
 export type DenseVector = number[]
@@ -309,12 +320,28 @@ export interface QueryRequest {
   fusion?: Fusion
 }
 
+/** Order scroll results by a payload field: a bare key or an options object. */
+export type OrderBySelector =
+  | string
+  | {
+      key: string
+      direction?: 'asc' | 'desc'
+      /** Where to start from: number for int/float, ISO string for datetime. */
+      start_from?: number | string
+    }
+
 export interface ScrollRequest {
   offset?: number | string
   limit?: number
   filter?: Filter
   with_payload?: boolean
   with_vector?: boolean
+  /**
+   * Order records by a payload field instead of by id. Note: `next_offset`
+   * is not returned when ordering by field — paginate with a range filter
+   * on the order key instead.
+   */
+  order_by?: OrderBySelector
 }
 
 export interface ScrollResult {
@@ -335,11 +362,26 @@ export type Condition =
   | { is_empty: { key: string } }
   | { is_null: { key: string } }
   | { has_id: (number | string)[] }
+  /** Match points that carry the named vector (use `""` for the default). */
+  | { has_vector: string }
+  /**
+   * Deterministic slice of the point-id space: selects the points whose id
+   * hashes into slice `index` of `total` disjoint slices. Useful for
+   * processing a shard in independent batches.
+   */
+  | { slice: { total: number; index: number } }
   | Filter
 
 export interface MatchCondition {
   value?: string | number | boolean
+  /** Full-text match: all tokens must be present (`text` field index). */
   text?: string
+  /** Full-text match: at least one token must be present. */
+  text_any?: string
+  /** Full-text phrase match; requires a `text` index with phrase matching. */
+  phrase?: string
+  /** Prefix match on a `text`-indexed field. */
+  prefix?: string
   any?: (string | number)[]
   except?: (string | number)[]
 }
@@ -475,10 +517,15 @@ export type Bm25TokenizerType =
  */
 export type Bm25Stopwords = string | { languages?: string[]; custom?: string[] }
 
-/** Snowball stemmer configuration. `language` is snake_case or ISO code (e.g. `"english"` / `"en"`). */
-export interface Bm25Stemmer {
-  language: string
-}
+/**
+ * Stemmer configuration. Snowball stemming with a snake_case or ISO language
+ * code (e.g. `"english"` / `"en"`), or `{ type: 'none' }` to explicitly
+ * disable stemming — distinct from leaving `stemmer` unset, which falls back
+ * to the language default.
+ */
+export type Bm25Stemmer =
+  | { type: 'snowball'; language: string }
+  | { type: 'none' }
 
 /**
  * Configuration for an on-device BM25 model. Mirrors Qdrant REST `Bm25Config`
