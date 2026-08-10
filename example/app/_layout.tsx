@@ -20,6 +20,7 @@ const BasicsIcon = makeTabBarIcon('cube-outline')
 const SimilarityIcon = makeTabBarIcon('search-outline')
 const Bm25Icon = makeTabBarIcon('layers-outline')
 const FacetIcon = makeTabBarIcon('stats-chart-outline')
+const GroupsIcon = makeTabBarIcon('albums-outline')
 const MmrIcon = makeTabBarIcon('apps-outline')
 const BenchmarkIcon = makeTabBarIcon('speedometer-outline')
 
@@ -73,6 +74,13 @@ export default function Layout() {
         options={{
           title: 'Facet',
           tabBarIcon: FacetIcon,
+        }}
+      />
+      <Tabs.Screen
+        name="groups"
+        options={{
+          title: 'Groups',
+          tabBarIcon: GroupsIcon,
         }}
       />
       <Tabs.Screen
