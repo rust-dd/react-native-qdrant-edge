@@ -6,7 +6,7 @@
 
 Embedded vector search for React Native. Runs the [Qdrant](https://qdrant.tech) search engine **in-process** on the device — no server, no network, fully offline.
 
-Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) 0.7 (Rust) with [Nitro Modules](https://nitro.margelo.com) for near-zero JS↔native overhead.
+Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) 0.8 (Rust) with [Nitro Modules](https://nitro.margelo.com) for near-zero JS↔native overhead.
 
 ## Features
 
@@ -14,9 +14,13 @@ Built on [qdrant-edge](https://qdrant.tech/documentation/edge/) 0.7 (Rust) with 
 - **On-device BM25** sparse embedding (no embedding model to ship)
 - **Hybrid search** via prefetch + fusion (RRF, DBSF)
 - **Advanced query modes**: recommend, discover, context, MMR (diversity), order-by, sample
+- **Query groups** — group results by a payload field (top-k per group)
+- **Search matrix** — pairwise distances over a sample, for dedup/clustering
+- **Search params** — `hnsw_ef`, exact search, quantization overrides, ACORN, filtered IDF corpus
+- **Parallel search** — per-segment reads run on a configurable thread pool
 - **Faceting** — count points per unique value of a payload key
 - **Snapshot interop** with cloud Qdrant
-- Structured payload filtering (`must` / `should` / `must_not` / `min_should`)
+- Structured payload filtering (`must` / `should` / `must_not` / `min_should`), incl. full-text, phrase, and prefix match
 - Filter-based payload updates (set / overwrite / delete / clear)
 - Dynamic vector slots (add / remove named vectors at runtime)
 - Runtime HNSW + optimizer config tuning
@@ -103,6 +107,8 @@ const shard = createShard(path, {
   hnsw_config:    { m: 16, ef_construct: 100 },
   optimizers:     { default_segment_number: 2, indexing_threshold: 20_000 },
   wal_options:    { segment_capacity: 4 * 1024 * 1024 }, // mobile-friendly 4 MiB
+  max_search_threads: 2,   // per-segment reads run in parallel (default: CPU-derived)
+  search_pool_core: 0,     // optionally pin search threads to one core (best-effort)
 })
 ```
 
@@ -170,9 +176,29 @@ const results = shard.search({
   filter: {
     must: [{ key: 'category', match: { value: 'electronics' } }],
   },
+  params: { hnsw_ef: 128 },             // optional search-time tuning
 })
 // [{ id: '1', score: 0.98, payload: { category: '…' } }, …]
 ```
+
+#### Search params
+
+`params` is accepted by `search`, `query`, `queryGroups`, and every prefetch level:
+
+```ts
+{
+  hnsw_ef: 128,            // HNSW beam size — accuracy vs speed
+  exact: true,             // brute-force search, no approximation
+  indexed_only: true,      // skip slow un-indexed segments
+  quantization: { ignore: false, rescore: true, oversampling: 2.0 },
+  acorn: { enable: true, max_selectivity: 0.4 },
+  idf: { corpus: { must: [{ key: 'lang', match: { value: 'en' } }] } },
+}
+```
+
+`idf` selects the population that sparse-vector IDF statistics are computed
+over (requires a sparse vector with `modifier: 'idf'`): `'global'` (default)
+or `{ corpus: <filter> }` to score against a filtered corpus.
 
 ### Hybrid query (dense + BM25 sparse)
 
@@ -200,6 +226,17 @@ bm25.close()
 
 `fusion: { fusion: 'rrf', k: 60, weights: [2.0, 1.0] }` accepts an optional RRF `k` and per-source weights. Prefetches nest arbitrarily.
 
+The BM25 model is configurable (`k`, `b`, `avg_len`, tokenizer, stopwords,
+stemmer, …). Stemming can be explicitly disabled — the recommended
+language-neutral setup:
+
+```ts
+const bm25 = createBm25({
+  stemmer: { type: 'none' },
+  stopwords: { languages: [] },
+})
+```
+
 ### Advanced query modes
 
 All of these go in the `query` slot at the root or within a prefetch:
@@ -224,12 +261,51 @@ shard.query({ query: { sample: 'random' }, limit: 50 })
 shard.query({ query: { mmr: { vector: v, lambda: 0.5, candidates_limit: 100 } }, limit: 10 })
 ```
 
+### Query groups
+
+Group results by a payload field — each group key appears once with its own
+top hits, instead of one value dominating the result list.
+
+```ts
+const groups = shard.queryGroups({
+  query: queryVector,
+  group_by: 'document_id',   // payload key to group by
+  limit: 5,                  // number of groups
+  group_size: 3,             // hits per group
+  with_payload: true,
+})
+// [{ key: 'doc-1', hits: [{ id, score, payload }, …] }, …]
+```
+
+### Search matrix
+
+Pairwise distances over a random sample — each sampled point's nearest
+neighbours within the sample. Useful for on-device dedup and clustering.
+
+```ts
+const { sample_ids, nearests } = shard.searchMatrix({
+  sample: 20,     // points to sample (default 10)
+  limit: 3,       // neighbours per sample (default 3)
+  using: 'dense', // omit for the default vector
+  filter: { must: [{ key: 'active', match: { value: true } }] },
+})
+// nearests[i] are the neighbours of sample_ids[i]
+```
+
 ### Retrieve & scroll
 
 ```ts
 const points = shard.retrieve([1, 2, 'uuid-…'], { withPayload: true, withVector: false })
 
 const { points, next_offset } = shard.scroll({ limit: 100, with_payload: true })
+
+// Order by an indexed payload field (numeric / datetime index required).
+// next_offset is not returned when ordering by field.
+const latest = shard.scroll({
+  limit: 20,
+  with_payload: true,
+  order_by: { key: 'created_at', direction: 'desc' },
+})
 
 const total = shard.count()
 const active = shard.count({ must: [{ key: 'active', match: { value: true } }] })
@@ -268,9 +344,10 @@ const merged = recoverPartialSnapshot(shard.path, current, '/tmp/snapshot-unpack
 ### Lifecycle
 
 ```ts
-shard.flush()       // persist to disk
+shard.flush()       // persist to disk (throws on failure)
 shard.optimize()    // merge segments, build HNSW indexes
-shard.info()        // { points_count, segments_count, indexed_vectors_count }
+shard.info()        // { points_count, segments_count, indexed_vectors_count,
+                    //   payload_schema: { category: { data_type: 'keyword', points: 42 }, … } }
 shard.close()       // flush + release
 ```
 
@@ -317,6 +394,18 @@ Filters follow the [Qdrant filter syntax](https://qdrant.tech/documentation/conc
 }
 ```
 
+Text matching supports full-text (`text`), any-token (`text_any`), phrase
+(`phrase`), and prefix (`prefix`) modes on `text`-indexed fields:
+
+```ts
+{ must: [{ key: 'title', match: { prefix: 'qdra' } }] }
+```
+
+Additional conditions: `{ has_id: [...] }`, `{ has_vector: 'name' }`,
+`{ is_empty: { key } }`, `{ is_null: { key } }`, and
+`{ slice: { total, index } }` — a deterministic slice of the point-id space
+for processing a shard in independent batches.
+
 ### Error handling
 
 Every Shard / Bm25 method that fails throws a JS `Error` with a message of the form `"<operation> failed: <cause>"`. For structured access:
@@ -337,7 +426,7 @@ try {
 ```ts
 import {
   useShard, useUpsert, useDelete,
-  useSearch, useQuery,
+  useSearch, useQuery, useQueryGroups, useSearchMatrix,
   useRetrieve, useScroll, useCount, useShardInfo,
   useBm25, useFacet, useSnapshotManifest,
 } from 'react-native-qdrant-edge'
@@ -390,6 +479,26 @@ const docs = createShard(`${dir}/docs`,   { vectors: { '': { size: 768, distance
 const imgs = createShard(`${dir}/photos`, { vectors: { '': { size: 512, distance: 'Dot' } } })
 ```
 
+## Migration from 0.3.x
+
+0.4.0 upgrades the engine from qdrant-edge 0.7 to 0.8. Additive on the JS
+API, with three behavior notes:
+
+- **`Bm25Stemmer` type corrected** — the shape is
+  `{ type: 'snowball', language: 'english' }` or `{ type: 'none' }`. The old
+  `{ language }` TS shape never deserialized at runtime, so no working call
+  site changes.
+- **`flush()` now throws on failure** instead of aborting the process on an
+  internal panic.
+- **`search()` routes through the query engine** (upstream deprecated the
+  standalone search path). Results are identical.
+
+New in 0.4.0: `queryGroups`, `searchMatrix`, `params` on
+search/query/prefetch (incl. filtered IDF corpus), `payload_schema` in
+`info()`, `order_by` scroll, `prefix` match, `has_vector` / `slice`
+conditions, and the `max_search_threads` / `search_pool_core` config for the
+parallel search pool.
+
 ## Migration from 0.2.x
 
 Mostly additive. The only TS-visible widening is:
@@ -406,8 +515,8 @@ Note one upstream behavior change: with `optimizers.prevent_unoptimized: true`, 
 TypeScript API
   → Nitro HybridObject (C++, near-zero JS overhead)
     → extern "C" FFI
-      → qdrant-edge 0.7 (Rust)
-        → HNSW index, WAL, segment storage, BM25 tokenizer
+      → qdrant-edge 0.8 (Rust)
+        → HNSW index, WAL, segment storage, BM25 tokenizer, search thread pool
 ```
 
 All operations are synchronous and run on the JS thread via JSI — no bridge, no serialization between JS and the C++ object. Vector and metadata payloads cross the FFI boundary as JSON; the JSON-parse overhead is negligible vs HNSW lookup for search, and measurable but acceptable for bulk upsert (raw `Float32Array` marshaling is on the roadmap — see Future work).
@@ -442,6 +551,7 @@ npm run specs
 - **ArrayBuffer / `Float32Array` for vectors** — skip JSON encoding for bulk upsert (HNSW search itself is already JSON-light).
 - **Async / background-thread operations** — offload `optimize`, bulk `upsert`, and `snapshotManifest` via Nitro async methods.
 - **Formula rescoring** — the upstream AST does not impl Deserialize; will need a typed expression builder API.
+- **Read-only follower shards** — qdrant-edge 0.8 ships `ReadOnlyEdgeShard` (one writer process, N reader processes over the same directory); useful for app-extension setups, not yet exposed here.
 - **gRPC client wrapper** — out of scope, but could ship alongside.
 
 ## License
