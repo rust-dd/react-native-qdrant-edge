@@ -70,6 +70,18 @@ export interface QdrantEdgeShard extends HybridObject<{
    * @returns JSON array of scored points
    */
   query(requestJson: string): string
+  /**
+   * Group query results by a payload field.
+   * @param requestJson - JSON QueryGroupsRequest: query fields + { group_by, limit?, group_size? }
+   * @returns JSON array of `{ key, hits }` groups
+   */
+  queryGroups(requestJson: string): string
+  /**
+   * Pairwise distance matrix over a random sample of points.
+   * @param requestJson - JSON SearchMatrixRequest: `{ sample?, limit?, filter?, using? }`
+   * @returns JSON `{ sample_ids, nearests }`
+   */
+  searchMatrix(requestJson: string): string
 
   /**
    * Retrieve specific points by IDs.

@@ -8,6 +8,12 @@ mod point;
 mod requests;
 mod vectors;
 
-pub(crate) use outputs::{RecordOutput, ScoredPointOutput, ScrollOutput, ShardInfoOutput};
+pub(crate) use outputs::{
+    GroupOutput, RecordOutput, ScoredPointOutput, ScrollOutput, SearchMatrixOutput,
+    ShardInfoOutput,
+};
 pub(crate) use point::PointInput;
-pub(crate) use requests::{FacetInput, QueryInput, ScrollInput, SearchInput};
+pub(crate) use requests::{
+    FacetInput, GroupsInput, MatrixInput, QueryInput, ScrollInput, SearchInput,
+};
+pub(crate) use vectors::vector_struct_to_json;

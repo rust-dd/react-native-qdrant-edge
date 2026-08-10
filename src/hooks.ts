@@ -10,12 +10,16 @@ import type {
   FacetResponse,
   FieldIndexType,
   Point,
+  PointGroup,
   PointId,
+  QueryGroupsRequest,
   QueryRequest,
   RetrievedPoint,
   ScoredPoint,
   ScrollRequest,
   ScrollResult,
+  SearchMatrixRequest,
+  SearchMatrixResult,
   SearchRequest,
   ShardInfo,
   SnapshotManifest,
@@ -56,6 +60,12 @@ class ShardWrapper {
   }
   query(req: QueryRequest): ScoredPoint[] {
     return JSON.parse(this._raw.query(JSON.stringify(req)))
+  }
+  queryGroups(req: QueryGroupsRequest): PointGroup[] {
+    return JSON.parse(this._raw.queryGroups(JSON.stringify(req)))
+  }
+  searchMatrix(req: SearchMatrixRequest = {}): SearchMatrixResult {
+    return JSON.parse(this._raw.searchMatrix(JSON.stringify(req)))
   }
   retrieve(
     ids: PointId[],
@@ -298,6 +308,91 @@ export function useQuery(options: UseQueryOptions): UseQueryResult {
   return { results, error, query }
 }
 
+export interface UseQueryGroupsOptions {
+  shard: ShardWrapper | null
+  request: QueryGroupsRequest | null
+  enabled?: boolean
+}
+
+export interface UseQueryGroupsResult {
+  groups: PointGroup[]
+  error: string | null
+  queryGroups: (request?: QueryGroupsRequest) => PointGroup[]
+}
+
+export function useQueryGroups(
+  options: UseQueryGroupsOptions
+): UseQueryGroupsResult {
+  const { shard, request, enabled = true } = options
+  const [groups, setGroups] = useState<PointGroup[]>([])
+  const [error, setError] = useState<string | null>(null)
+
+  const queryGroups = useCallback(
+    (override?: QueryGroupsRequest) => {
+      const req = override ?? request
+      if (!shard || !req) return []
+      try {
+        setError(null)
+        const r = shard.queryGroups(req)
+        setGroups(r)
+        return r
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+        return []
+      }
+    },
+    [shard, request]
+  )
+
+  useEffect(() => {
+    if (enabled && shard && request) queryGroups()
+  }, [enabled, shard, request, queryGroups])
+
+  return { groups, error, queryGroups }
+}
+
+export interface UseSearchMatrixOptions {
+  shard: ShardWrapper | null
+  request?: SearchMatrixRequest
+  enabled?: boolean
+}
+
+export interface UseSearchMatrixResult {
+  matrix: SearchMatrixResult | null
+  error: string | null
+  searchMatrix: (request?: SearchMatrixRequest) => SearchMatrixResult | null
+}
+
+export function useSearchMatrix(
+  options: UseSearchMatrixOptions
+): UseSearchMatrixResult {
+  const { shard, request, enabled = true } = options
+  const [matrix, setMatrix] = useState<SearchMatrixResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const searchMatrix = useCallback(
+    (override?: SearchMatrixRequest) => {
+      if (!shard) return null
+      try {
+        setError(null)
+        const r = shard.searchMatrix(override ?? request ?? {})
+        setMatrix(r)
+        return r
+      } catch (e: any) {
+        setError(e.message ?? String(e))
+        return null
+      }
+    },
+    [shard, request]
+  )
+
+  useEffect(() => {
+    if (enabled && shard) searchMatrix()
+  }, [enabled, shard, searchMatrix])
+
+  return { matrix, error, searchMatrix }
+}
+
 export interface UseRetrieveResult {
   points: RetrievedPoint[]
   error: string | null
@@ -312,7 +407,10 @@ export function useRetrieve(shard: ShardWrapper | null): UseRetrieveResult {
   const [error, setError] = useState<string | null>(null)
 
   const retrieve = useCallback(
-    (ids: PointId[], opts?: { withPayload?: boolean; withVector?: boolean }) => {
+    (
+      ids: PointId[],
+      opts?: { withPayload?: boolean; withVector?: boolean }
+    ) => {
       if (!shard) {
         setError('shard not open')
         return []

@@ -11,9 +11,11 @@ mod error;
 mod facet;
 mod ffi_strings;
 mod field_index;
+mod grouping;
 mod handle;
 mod info;
 mod lifecycle;
+mod matrix;
 mod payload;
 mod points;
 mod retrieve_scroll;
@@ -34,8 +36,10 @@ pub use error::qe_last_error;
 pub use facet::qe_shard_facet;
 pub use ffi_strings::qe_free_string;
 pub use field_index::{qe_shard_create_field_index, qe_shard_delete_field_index};
+pub use grouping::qe_shard_query_groups;
 pub use handle::QeShardHandle;
 pub use info::qe_shard_info;
+pub use matrix::qe_shard_search_matrix;
 pub use lifecycle::{
     qe_shard_close, qe_shard_create, qe_shard_flush, qe_shard_load, qe_shard_optimize,
 };

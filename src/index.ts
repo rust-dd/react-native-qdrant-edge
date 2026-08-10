@@ -13,12 +13,16 @@ import type {
   HnswConfig,
   OptimizersConfig,
   Point,
+  PointGroup,
   PointId,
+  QueryGroupsRequest,
   QueryRequest,
   RetrievedPoint,
   ScoredPoint,
   ScrollRequest,
   ScrollResult,
+  SearchMatrixRequest,
+  SearchMatrixResult,
   SearchRequest,
   SetPayloadOp,
   ShardInfo,
@@ -67,8 +71,10 @@ export type {
   WalOptions,
   MultiVector,
   Point,
+  PointGroup,
   Prefetch,
   QueryClause,
+  QueryGroupsRequest,
   QueryRequest,
   RangeCondition,
   ResultVector,
@@ -77,6 +83,8 @@ export type {
   ScoredPoint,
   ScrollRequest,
   ScrollResult,
+  SearchMatrixRequest,
+  SearchMatrixResult,
   SearchRequest,
   ShardInfo,
   SnapshotManifest,
@@ -111,7 +119,11 @@ export class Shard {
   }
 
   /** Merge payload into one or more points (by `pointId` or filter — see `setPayloadOp`). */
-  setPayload(pointId: PointId, payload: Record<string, unknown>, key?: string): void {
+  setPayload(
+    pointId: PointId,
+    payload: Record<string, unknown>,
+    key?: string
+  ): void {
     this._raw.setPayload(JSON.stringify({ payload, points: [pointId], key }))
   }
 
@@ -161,6 +173,21 @@ export class Shard {
   query(request: QueryRequest): ScoredPoint[] {
     const json = this._raw.query(JSON.stringify(request))
     return JSON.parse(json) as ScoredPoint[]
+  }
+
+  /** Group query results by a payload field. */
+  queryGroups(request: QueryGroupsRequest): PointGroup[] {
+    const json = this._raw.queryGroups(JSON.stringify(request))
+    return JSON.parse(json) as PointGroup[]
+  }
+
+  /**
+   * Distance matrix over a random sample of points — each sampled point's
+   * nearest neighbours within the sample.
+   */
+  searchMatrix(request: SearchMatrixRequest = {}): SearchMatrixResult {
+    const json = this._raw.searchMatrix(JSON.stringify(request))
+    return JSON.parse(json) as SearchMatrixResult
   }
 
   retrieve(
@@ -356,6 +383,8 @@ export {
   useDelete,
   useSearch,
   useQuery,
+  useQueryGroups,
+  useSearchMatrix,
   useRetrieve,
   useScroll,
   useCount,
@@ -373,6 +402,10 @@ export type {
   UseSearchResult,
   UseQueryOptions,
   UseQueryResult,
+  UseQueryGroupsOptions,
+  UseQueryGroupsResult,
+  UseSearchMatrixOptions,
+  UseSearchMatrixResult,
   UseRetrieveResult,
   UseScrollResult,
   UseCountResult,

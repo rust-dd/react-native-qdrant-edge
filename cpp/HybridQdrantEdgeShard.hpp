@@ -116,6 +116,20 @@ public:
     return takeString(result);
   }
 
+  std::string queryGroups(const std::string& requestJson) override {
+    ensureOpen();
+    char* result = qe_shard_query_groups(_handle, requestJson.c_str());
+    if (!result) throwLastError("queryGroups");
+    return takeString(result);
+  }
+
+  std::string searchMatrix(const std::string& requestJson) override {
+    ensureOpen();
+    char* result = qe_shard_search_matrix(_handle, requestJson.c_str());
+    if (!result) throwLastError("searchMatrix");
+    return takeString(result);
+  }
+
   std::string retrieve(const std::string& idsJson, bool withPayload, bool withVector) override {
     ensureOpen();
     char* result = qe_shard_retrieve(_handle, idsJson.c_str(), withPayload, withVector);

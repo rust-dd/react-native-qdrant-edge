@@ -187,6 +187,70 @@ fn search_params_pass_through() {
 }
 
 #[test]
+fn query_groups_by_payload_field() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+    upsert_fixture_points(handle);
+
+    let req = cstr(
+        &json!({
+            "query": [1.0, 0.0, 0.0, 0.0],
+            "group_by": "category",
+            "limit": 2,
+            "group_size": 2,
+            "with_payload": true,
+        })
+        .to_string(),
+    );
+    let groups = take_json(unsafe { qe_shard_query_groups(handle, req.as_ptr()) });
+    let groups = groups.as_array().unwrap();
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0]["key"], "alpha");
+    assert_eq!(groups[1]["key"], "beta");
+
+    let alpha_hits = groups[0]["hits"].as_array().unwrap();
+    assert_eq!(alpha_hits.len(), 2);
+    assert_eq!(alpha_hits[0]["id"], "1");
+    assert_eq!(alpha_hits[0]["payload"]["rank"], 1, "hits are hydrated with full payload");
+    assert_eq!(groups[1]["hits"].as_array().unwrap().len(), 1);
+
+    let req = cstr(
+        &json!({
+            "query": [1.0, 0.0, 0.0, 0.0],
+            "group_by": "category",
+            "limit": 1,
+            "with_payload": false,
+        })
+        .to_string(),
+    );
+    let groups = take_json(unsafe { qe_shard_query_groups(handle, req.as_ptr()) });
+    let hit = &groups.as_array().unwrap()[0]["hits"][0];
+    assert!(hit.get("payload").is_none(), "payload off leaves hits bare");
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
+fn search_matrix_over_sampled_points() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+    upsert_fixture_points(handle);
+
+    let req = cstr(&json!({ "sample": 3, "limit": 2 }).to_string());
+    let matrix = take_json(unsafe { qe_shard_search_matrix(handle, req.as_ptr()) });
+    let sample_ids = matrix["sample_ids"].as_array().unwrap();
+    let nearests = matrix["nearests"].as_array().unwrap();
+    assert_eq!(sample_ids.len(), 3);
+    assert_eq!(nearests.len(), 3);
+    for row in nearests {
+        let row = row.as_array().unwrap();
+        assert!(!row.is_empty() && row.len() <= 2);
+    }
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
 fn retrieve_by_ids_preserves_order_and_payload() {
     let dir = TempShardDir::new();
     let handle = create_test_shard(&dir);

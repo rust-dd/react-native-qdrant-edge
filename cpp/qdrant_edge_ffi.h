@@ -104,6 +104,12 @@ int32_t qe_shard_create_field_index(struct QeShardHandle *handle,
 int32_t qe_shard_delete_field_index(struct QeShardHandle *handle, const char *field_name);
 
 /**
+ * Group query results by a payload field. Returns a JSON array of
+ * `{ key, hits }` groups, or `null` on error.
+ */
+char *qe_shard_query_groups(struct QeShardHandle *handle, const char *request_json);
+
+/**
  * Get shard info. Returns a JSON object, or `null` on error.
  */
 char *qe_shard_info(struct QeShardHandle *handle);
@@ -134,6 +140,13 @@ int32_t qe_shard_flush(struct QeShardHandle *handle);
  * Returns 1 if something was optimized, 0 if already optimal, -1 on error.
  */
 int32_t qe_shard_optimize(struct QeShardHandle *handle);
+
+/**
+ * Pairwise distance matrix over a random sample of points. Returns JSON
+ * `{ sample_ids, nearests }` where `nearests[i]` are the neighbours of
+ * `sample_ids[i]` within the sample, or `null` on error.
+ */
+char *qe_shard_search_matrix(struct QeShardHandle *handle, const char *request_json);
 
 /**
  * Set (merge) payload fields. `op_json`: `{ payload, points?, filter?, key? }`.

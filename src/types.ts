@@ -390,6 +390,59 @@ export interface FacetResponse {
 }
 
 /**
+ * Group query results by a payload field. Mirrors the qdrant REST
+ * `query_groups` shape: the usual query fields plus `group_by`; `limit` is
+ * the number of groups and `group_size` the number of hits per group.
+ */
+export interface QueryGroupsRequest {
+  /** Payload key (JSON path) to group by. */
+  group_by: string
+  /** Maximum number of groups to return. Default `10`. */
+  limit?: number
+  /** Maximum number of hits per group. Default `3`. */
+  group_size?: number
+  /** Scoring clause; same shapes as `QueryRequest.query`. */
+  query?: QueryClause
+  using?: string
+  filter?: Filter
+  prefetch?: Prefetch | Prefetch[]
+  score_threshold?: number
+  /** Hydrate hits with payload. Default `true`. */
+  with_payload?: boolean
+  /** Hydrate hits with vectors. Default `false`. */
+  with_vector?: boolean
+  params?: SearchParams
+}
+
+/** One result group: the shared `group_by` value and its scored hits. */
+export interface PointGroup {
+  key: string | number
+  hits: ScoredPoint[]
+}
+
+/**
+ * Distance-matrix request: sample `sample` random points, then find each
+ * sample's `limit` nearest neighbours restricted to the sampled set.
+ * Useful for on-device dedup and clustering.
+ */
+export interface SearchMatrixRequest {
+  /** How many random points to sample. Default `10`. */
+  sample?: number
+  /** How many nearest neighbours to return per sampled point. Default `3`. */
+  limit?: number
+  /** Only sample points which satisfy these conditions. */
+  filter?: Filter
+  /** Named vector the sampled points are compared by (omit for the default). */
+  using?: string
+}
+
+/** `nearests[i]` are the neighbours of `sample_ids[i]` within the sample. */
+export interface SearchMatrixResult {
+  sample_ids: string[]
+  nearests: ScoredPoint[][]
+}
+
+/**
  * Opaque snapshot manifest. Pass to `recoverPartialSnapshot` verbatim — the
  * shape mirrors qdrant's internal representation and is not stable across
  * upstream versions; treat as a black box.
@@ -397,16 +450,18 @@ export interface FacetResponse {
 export type SnapshotManifest = Record<string, unknown>
 
 /** BM25 tokenizer choice (Qdrant snake_case wire format). */
-export type Bm25TokenizerType = 'prefix' | 'whitespace' | 'word' | 'multilingual'
+export type Bm25TokenizerType =
+  | 'prefix'
+  | 'whitespace'
+  | 'word'
+  | 'multilingual'
 
 /**
  * Stopwords configuration. A string is interpreted as a snake_case language
  * name (e.g. `"english"`); an object enables multiple language sets and/or
  * an additional custom word list.
  */
-export type Bm25Stopwords =
-  | string
-  | { languages?: string[]; custom?: string[] }
+export type Bm25Stopwords = string | { languages?: string[]; custom?: string[] }
 
 /** Snowball stemmer configuration. `language` is snake_case or ISO code (e.g. `"english"` / `"en"`). */
 export interface Bm25Stemmer {

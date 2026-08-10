@@ -58,6 +58,19 @@ pub(crate) struct ScrollOutput {
     pub(crate) next_offset: Option<String>,
 }
 
+/// One result group: the shared `group_by` value and its scored hits.
+#[derive(Serialize)]
+pub(crate) struct GroupOutput {
+    pub(crate) key: serde_json::Value,
+    pub(crate) hits: Vec<ScoredPointOutput>,
+}
+
+#[derive(Serialize)]
+pub(crate) struct SearchMatrixOutput {
+    pub(crate) sample_ids: Vec<String>,
+    pub(crate) nearests: Vec<Vec<ScoredPointOutput>>,
+}
+
 #[derive(Serialize)]
 pub(crate) struct ShardInfoOutput {
     pub(crate) segments_count: usize,

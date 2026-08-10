@@ -120,6 +120,84 @@ fn build_prefetches(spec: Option<PrefetchSpec>) -> Result<Vec<qdrant_edge::Prefe
         .collect()
 }
 
+/// JSON-deserializable query-groups request. Mirrors the qdrant REST
+/// `query_groups` shape: the flattened query fields plus `group_by`,
+/// `limit` (number of groups), and `group_size` (hits per group).
+#[derive(Deserialize)]
+pub(crate) struct GroupsInput {
+    #[serde(flatten)]
+    pub(crate) query: QueryInput,
+    pub(crate) group_by: qdrant_edge::JsonPath,
+    #[serde(default = "default_group_size")]
+    pub(crate) group_size: usize,
+}
+
+fn default_group_size() -> usize {
+    3
+}
+
+impl GroupsInput {
+    /// The requested hit hydration, resolved with the query-API defaults
+    /// (payload on, vectors off). The grouping driver overrides both on its
+    /// sub-requests, so the FFI hydrates hits itself after grouping.
+    pub(crate) fn hydration(&self) -> (bool, bool) {
+        (
+            self.query.with_payload.unwrap_or(true),
+            self.query.with_vector.unwrap_or(false),
+        )
+    }
+
+    pub(crate) fn into_group_request(self) -> Result<qdrant_edge::GroupRequest, String> {
+        let GroupsInput {
+            query,
+            group_by,
+            group_size,
+        } = self;
+        let groups = query.limit;
+        Ok(qdrant_edge::GroupRequest {
+            query: query.into_query_request()?,
+            group_by,
+            groups,
+            group_size,
+        })
+    }
+}
+
+/// JSON-deserializable search-matrix request. Mirrors the qdrant REST
+/// `search_matrix` shape: `sample` points, `limit` neighbours per sample.
+#[derive(Deserialize)]
+pub(crate) struct MatrixInput {
+    #[serde(default = "default_matrix_sample")]
+    pub(crate) sample: usize,
+    #[serde(default = "default_matrix_limit")]
+    pub(crate) limit: usize,
+    #[serde(default)]
+    pub(crate) filter: Option<Filter>,
+    #[serde(default)]
+    pub(crate) using: Option<String>,
+}
+
+fn default_matrix_sample() -> usize {
+    10
+}
+
+fn default_matrix_limit() -> usize {
+    3
+}
+
+impl MatrixInput {
+    pub(crate) fn into_matrix_request(self) -> qdrant_edge::SearchMatrixRequest {
+        qdrant_edge::SearchMatrixRequest {
+            sample_size: self.sample,
+            limit_per_sample: self.limit,
+            filter: self.filter,
+            using: self
+                .using
+                .unwrap_or_else(|| qdrant_edge::DEFAULT_VECTOR_NAME.to_string()),
+        }
+    }
+}
+
 /// JSON-deserializable scroll request; mirrors the serde shape upstream
 /// `ScrollRequestInternal` had before `ScrollRequest` lost `Deserialize`.
 #[derive(Deserialize)]

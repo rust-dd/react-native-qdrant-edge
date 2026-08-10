@@ -61,6 +61,8 @@ namespace margelo::nitro::qdrantedge {
       virtual void deleteFieldIndex(const std::string& fieldName) = 0;
       virtual std::string search(const std::string& requestJson) = 0;
       virtual std::string query(const std::string& requestJson) = 0;
+      virtual std::string queryGroups(const std::string& requestJson) = 0;
+      virtual std::string searchMatrix(const std::string& requestJson) = 0;
       virtual std::string retrieve(const std::string& idsJson, bool withPayload, bool withVector) = 0;
       virtual std::string scroll(const std::string& requestJson) = 0;
       virtual double count(const std::string& filterJson) = 0;

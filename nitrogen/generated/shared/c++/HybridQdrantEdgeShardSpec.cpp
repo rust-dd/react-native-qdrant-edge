@@ -27,6 +27,8 @@ namespace margelo::nitro::qdrantedge {
       prototype.registerHybridMethod("deleteFieldIndex", &HybridQdrantEdgeShardSpec::deleteFieldIndex);
       prototype.registerHybridMethod("search", &HybridQdrantEdgeShardSpec::search);
       prototype.registerHybridMethod("query", &HybridQdrantEdgeShardSpec::query);
+      prototype.registerHybridMethod("queryGroups", &HybridQdrantEdgeShardSpec::queryGroups);
+      prototype.registerHybridMethod("searchMatrix", &HybridQdrantEdgeShardSpec::searchMatrix);
       prototype.registerHybridMethod("retrieve", &HybridQdrantEdgeShardSpec::retrieve);
       prototype.registerHybridMethod("scroll", &HybridQdrantEdgeShardSpec::scroll);
       prototype.registerHybridMethod("count", &HybridQdrantEdgeShardSpec::count);
