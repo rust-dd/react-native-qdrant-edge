@@ -1,6 +1,13 @@
-const { withDangerousMod, withPlugins } = require('@expo/config-plugins')
+const {
+  withDangerousMod,
+  withGradleProperties,
+  withPlugins,
+} = require('@expo/config-plugins')
 const path = require('path')
 const fs = require('fs')
+
+// The package ships prebuilt Rust libraries for these Android ABIs only.
+const ANDROID_ABIS = ['arm64-v8a', 'x86_64']
 
 function getPackageRoot() {
   const pkgJson = require.resolve('react-native-qdrant-edge/package.json')
@@ -66,8 +73,30 @@ function withQdrantEdgeAndroid(config) {
   ])
 }
 
+function withQdrantEdgeAbis(config) {
+  return withGradleProperties(config, (config) => {
+    const props = config.modResults
+    const prop = props.find(
+      (p) => p.type === 'property' && p.key === 'reactNativeArchitectures'
+    )
+    const requested = prop ? prop.value.split(',').map((abi) => abi.trim()) : []
+    const kept = requested.filter((abi) => ANDROID_ABIS.includes(abi))
+    const value = (kept.length > 0 ? kept : ANDROID_ABIS).join(',')
+    if (prop) {
+      prop.value = value
+    } else {
+      props.push({ type: 'property', key: 'reactNativeArchitectures', value })
+    }
+    return config
+  })
+}
+
 function withQdrantEdge(config) {
-  return withPlugins(config, [withQdrantEdgeIOS, withQdrantEdgeAndroid])
+  return withPlugins(config, [
+    withQdrantEdgeIOS,
+    withQdrantEdgeAndroid,
+    withQdrantEdgeAbis,
+  ])
 }
 
 module.exports = withQdrantEdge
