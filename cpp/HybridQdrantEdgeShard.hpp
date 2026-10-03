@@ -12,10 +12,11 @@ public:
   explicit HybridQdrantEdgeShard(QeShardHandle* handle)
       : HybridObject(TAG), _handle(handle) {
     if (!_handle) {
+      // The Rust error already names the failed step (create, load, recover).
       char* err = qe_last_error();
-      std::string msg = err ? err : "unknown error";
+      std::string msg = err ? err : "Failed to open shard: unknown error";
       if (err) qe_free_string(err);
-      throw std::runtime_error("Failed to create shard: " + msg);
+      throw std::runtime_error(msg);
     }
   }
 

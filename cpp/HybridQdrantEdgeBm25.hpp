@@ -13,9 +13,9 @@ public:
       : HybridObject(TAG), _handle(handle) {
     if (!_handle) {
       char* err = qe_last_error();
-      std::string msg = err ? err : "unknown error";
+      std::string msg = err ? err : "Failed to create BM25 model: unknown error";
       if (err) qe_free_string(err);
-      throw std::runtime_error("Failed to create BM25 model: " + msg);
+      throw std::runtime_error(msg);
     }
   }
 
