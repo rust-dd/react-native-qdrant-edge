@@ -4,7 +4,7 @@ export interface VectorParams {
   size: number
   distance: Distance
   on_disk?: boolean
-  datatype?: 'Float32' | 'Float16' | 'Uint8'
+  datatype?: 'float32' | 'float16' | 'uint8'
   multivector_config?: MultiVectorConfig
   /** Per-vector quantization override; falls back to `EdgeConfig.quantization_config`. */
   quantization_config?: QuantizationConfig
@@ -16,10 +16,13 @@ export interface SparseVectorParams {
   full_scan_threshold?: number
   on_disk?: boolean
   modifier?: 'none' | 'idf'
-  datatype?: 'Float32' | 'Float16' | 'Uint8'
+  datatype?: 'float32' | 'float16' | 'uint8'
 }
 
-/** HNSW index hyperparameters. All fields optional; upstream defaults apply. */
+/**
+ * HNSW index hyperparameters. Omitted fields take the upstream defaults
+ * (`m` 16, `ef_construct` 100, `full_scan_threshold` 10000), also in the setters.
+ */
 export interface HnswConfig {
   m?: number
   ef_construct?: number
@@ -35,6 +38,7 @@ export interface OptimizersConfig {
   vacuum_min_vector_number?: number
   default_segment_number?: number
   max_segment_size?: number
+  /** @deprecated Ignored by qdrant-edge: optimization only runs on `shard.optimize()`. */
   max_optimization_threads?: number
   indexing_threshold?: number
   /**
@@ -46,9 +50,9 @@ export interface OptimizersConfig {
 }
 
 /**
- * WAL (write-ahead log) options. Mobile deployments typically want a much
- * smaller `segment_capacity` than the upstream default (32 MiB) — see
- * `mobileWalDefaults()` for a recommended preset.
+ * WAL (write-ahead log) options; omitted fields take the upstream defaults.
+ * Mobile deployments want a smaller `segment_capacity` than the 32 MiB default
+ * — see `mobileWalDefaults()` for a recommended preset.
  */
 export interface WalOptions {
   /** Per-segment capacity in bytes. */
@@ -61,7 +65,7 @@ export interface WalOptions {
 
 /** Multi-vector (ColBERT-style) comparator. */
 export interface MultiVectorConfig {
-  comparator: 'MaxSim'
+  comparator: 'max_sim'
 }
 
 /**
@@ -380,7 +384,7 @@ export interface MatchCondition {
   text_any?: string
   /** Full-text phrase match; requires a `text` index with phrase matching. */
   phrase?: string
-  /** Prefix match on a `text`-indexed field. */
+  /** Case-sensitive prefix match on keyword values (not full-text). */
   prefix?: string
   any?: (string | number)[]
   except?: (string | number)[]

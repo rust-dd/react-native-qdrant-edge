@@ -12,7 +12,7 @@ export interface QdrantEdge extends HybridObject<{
   /**
    * Create a new shard on disk.
    * @param path - Filesystem path where the shard will be stored
-   * @param configJson - JSON EdgeConfig: { vectors: { "default": { size, distance } }, ... }
+   * @param configJson - JSON EdgeConfig: { vectors: { "": { size, distance } }, ... } ("" is the default vector)
    * @returns An open QdrantEdgeShard
    */
   createShard(path: string, configJson: string): QdrantEdgeShard
