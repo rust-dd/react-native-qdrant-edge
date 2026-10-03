@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NitroModules } from 'react-native-nitro-modules'
+import { Bm25, Shard } from './shard'
 import type { QdrantEdge } from './specs/QdrantEdge.nitro'
-import type { QdrantEdgeBm25 } from './specs/QdrantEdgeBm25.nitro'
-import type { QdrantEdgeShard } from './specs/QdrantEdgeShard.nitro'
 import type {
   Bm25Config,
   EdgeConfig,
   FacetRequest,
   FacetResponse,
-  FieldIndexType,
+  Filter,
   Point,
   PointGroup,
   PointId,
@@ -23,77 +22,13 @@ import type {
   SearchRequest,
   ShardInfo,
   SnapshotManifest,
-  SparseVector,
 } from './types'
 
-class ShardWrapper {
-  constructor(private readonly _raw: QdrantEdgeShard) {}
-  flush() {
-    this._raw.flush()
-  }
-  optimize() {
-    this._raw.optimize()
-  }
-  close() {
-    this._raw.close()
-  }
-  upsert(points: Point[]) {
-    this._raw.upsert(JSON.stringify(points))
-  }
-  deletePoints(ids: PointId[]) {
-    this._raw.deletePoints(JSON.stringify(ids))
-  }
-  setPayload(id: PointId, payload: Record<string, unknown>, key?: string) {
-    this._raw.setPayload(JSON.stringify({ payload, points: [id], key }))
-  }
-  deletePayload(id: PointId, keys: string[]) {
-    this._raw.deletePayload(JSON.stringify({ keys, points: [id] }))
-  }
-  createFieldIndex(name: string, type: FieldIndexType) {
-    this._raw.createFieldIndex(name, type)
-  }
-  deleteFieldIndex(name: string) {
-    this._raw.deleteFieldIndex(name)
-  }
-  search(req: SearchRequest): ScoredPoint[] {
-    return JSON.parse(this._raw.search(JSON.stringify(req)))
-  }
-  query(req: QueryRequest): ScoredPoint[] {
-    return JSON.parse(this._raw.query(JSON.stringify(req)))
-  }
-  queryGroups(req: QueryGroupsRequest): PointGroup[] {
-    return JSON.parse(this._raw.queryGroups(JSON.stringify(req)))
-  }
-  searchMatrix(req: SearchMatrixRequest = {}): SearchMatrixResult {
-    return JSON.parse(this._raw.searchMatrix(JSON.stringify(req)))
-  }
-  retrieve(
-    ids: PointId[],
-    opts: { withPayload?: boolean; withVector?: boolean } = {}
-  ): RetrievedPoint[] {
-    return JSON.parse(
-      this._raw.retrieve(
-        JSON.stringify(ids),
-        opts.withPayload ?? true,
-        opts.withVector ?? false
-      )
-    )
-  }
-  scroll(req: ScrollRequest = {}): ScrollResult {
-    return JSON.parse(this._raw.scroll(JSON.stringify(req)))
-  }
-  count(filter?: Record<string, unknown>): number {
-    return this._raw.count(filter ? JSON.stringify(filter) : '')
-  }
-  info(): ShardInfo {
-    return JSON.parse(this._raw.info())
-  }
-  facet(request: FacetRequest): FacetResponse {
-    return JSON.parse(this._raw.facet(JSON.stringify(request)))
-  }
-  snapshotManifest(): SnapshotManifest {
-    return JSON.parse(this._raw.snapshotManifest())
-  }
+/** Same instance for equal JSON, so inline objects don't re-run effects each render. */
+function useStableValue<T>(value: T): T {
+  const key = value === undefined ? undefined : JSON.stringify(value)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => value, [key])
 }
 
 let _factory: QdrantEdge | null = null
@@ -103,26 +38,34 @@ function getFactory(): QdrantEdge {
   return _factory
 }
 
-function _createShard(path: string, config: EdgeConfig): ShardWrapper {
-  return new ShardWrapper(
-    getFactory().createShard(path, JSON.stringify(config))
+function _createShard(path: string, config: EdgeConfig): Shard {
+  return new Shard(getFactory().createShard(path, JSON.stringify(config)))
+}
+
+function _loadShard(path: string, config?: EdgeConfig): Shard {
+  return new Shard(
+    getFactory().loadShard(path, config ? JSON.stringify(config) : '')
   )
 }
 
-function _loadShard(path: string, config?: EdgeConfig): ShardWrapper {
-  return new ShardWrapper(
-    getFactory().loadShard(path, config ? JSON.stringify(config) : '')
-  )
+function _openOrCreateShard(path: string, config: EdgeConfig): Shard {
+  try {
+    return _createShard(path, config)
+  } catch {
+    // Creating fails once the shard exists; open it instead.
+    return _loadShard(path, config)
+  }
 }
 
 export interface UseShardOptions {
   path: string
   config?: EdgeConfig
+  /** Create the shard (with `config`) when none exists at `path`; otherwise it is opened. */
   create?: boolean
 }
 
 export interface UseShardResult {
-  shard: ShardWrapper | null
+  shard: Shard | null
   isOpen: boolean
   error: string | null
   open: () => void
@@ -130,44 +73,46 @@ export interface UseShardResult {
 }
 
 export function useShard(options: UseShardOptions): UseShardResult {
-  const { path, config, create } = options
-  const [shard, setShard] = useState<ShardWrapper | null>(null)
+  const { path, create } = options
+  const config = useStableValue(options.config)
+  const [shard, setShard] = useState<Shard | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const shardRef = useRef<ShardWrapper | null>(null)
+  const shardRef = useRef<Shard | null>(null)
+
+  const closeCurrent = useCallback(() => {
+    if (shardRef.current) {
+      try {
+        shardRef.current.close()
+      } catch {}
+      shardRef.current = null
+    }
+  }, [])
 
   const open = useCallback(() => {
+    // A second handle on the same path would fail on the WAL lock.
+    closeCurrent()
     try {
       setError(null)
       const s =
-        create && config ? _createShard(path, config) : _loadShard(path, config)
+        create && config
+          ? _openOrCreateShard(path, config)
+          : _loadShard(path, config)
       shardRef.current = s
       setShard(s)
     } catch (e: any) {
       setError(e.message ?? String(e))
       setShard(null)
     }
-  }, [path, config, create])
+  }, [path, config, create, closeCurrent])
 
   const close = useCallback(() => {
     if (shardRef.current) {
-      try {
-        shardRef.current.close()
-      } catch {}
-      shardRef.current = null
+      closeCurrent()
       setShard(null)
     }
-  }, [])
+  }, [closeCurrent])
 
-  useEffect(() => {
-    return () => {
-      if (shardRef.current) {
-        try {
-          shardRef.current.close()
-        } catch {}
-        shardRef.current = null
-      }
-    }
-  }, [])
+  useEffect(() => closeCurrent, [closeCurrent])
 
   return { shard, isOpen: shard !== null, error, open, close }
 }
@@ -177,7 +122,7 @@ export interface UseUpsertResult {
   error: string | null
 }
 
-export function useUpsert(shard: ShardWrapper | null): UseUpsertResult {
+export function useUpsert(shard: Shard | null): UseUpsertResult {
   const [error, setError] = useState<string | null>(null)
 
   const upsert = useCallback(
@@ -204,7 +149,7 @@ export interface UseDeleteResult {
   error: string | null
 }
 
-export function useDelete(shard: ShardWrapper | null): UseDeleteResult {
+export function useDelete(shard: Shard | null): UseDeleteResult {
   const [error, setError] = useState<string | null>(null)
 
   const deletePoints = useCallback(
@@ -227,7 +172,7 @@ export function useDelete(shard: ShardWrapper | null): UseDeleteResult {
 }
 
 export interface UseSearchOptions {
-  shard: ShardWrapper | null
+  shard: Shard | null
   request: SearchRequest | null
   enabled?: boolean
 }
@@ -239,7 +184,8 @@ export interface UseSearchResult {
 }
 
 export function useSearch(options: UseSearchOptions): UseSearchResult {
-  const { shard, request, enabled = true } = options
+  const { shard, enabled = true } = options
+  const request = useStableValue(options.request)
   const [results, setResults] = useState<ScoredPoint[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -268,7 +214,7 @@ export function useSearch(options: UseSearchOptions): UseSearchResult {
 }
 
 export interface UseQueryOptions {
-  shard: ShardWrapper | null
+  shard: Shard | null
   request: QueryRequest | null
   enabled?: boolean
 }
@@ -280,7 +226,8 @@ export interface UseQueryResult {
 }
 
 export function useQuery(options: UseQueryOptions): UseQueryResult {
-  const { shard, request, enabled = true } = options
+  const { shard, enabled = true } = options
+  const request = useStableValue(options.request)
   const [results, setResults] = useState<ScoredPoint[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -309,7 +256,7 @@ export function useQuery(options: UseQueryOptions): UseQueryResult {
 }
 
 export interface UseQueryGroupsOptions {
-  shard: ShardWrapper | null
+  shard: Shard | null
   request: QueryGroupsRequest | null
   enabled?: boolean
 }
@@ -323,7 +270,8 @@ export interface UseQueryGroupsResult {
 export function useQueryGroups(
   options: UseQueryGroupsOptions
 ): UseQueryGroupsResult {
-  const { shard, request, enabled = true } = options
+  const { shard, enabled = true } = options
+  const request = useStableValue(options.request)
   const [groups, setGroups] = useState<PointGroup[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -352,7 +300,7 @@ export function useQueryGroups(
 }
 
 export interface UseSearchMatrixOptions {
-  shard: ShardWrapper | null
+  shard: Shard | null
   request?: SearchMatrixRequest
   enabled?: boolean
 }
@@ -366,7 +314,8 @@ export interface UseSearchMatrixResult {
 export function useSearchMatrix(
   options: UseSearchMatrixOptions
 ): UseSearchMatrixResult {
-  const { shard, request, enabled = true } = options
+  const { shard, enabled = true } = options
+  const request = useStableValue(options.request)
   const [matrix, setMatrix] = useState<SearchMatrixResult | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -402,7 +351,7 @@ export interface UseRetrieveResult {
   ) => RetrievedPoint[]
 }
 
-export function useRetrieve(shard: ShardWrapper | null): UseRetrieveResult {
+export function useRetrieve(shard: Shard | null): UseRetrieveResult {
   const [points, setPoints] = useState<RetrievedPoint[]>([])
   const [error, setError] = useState<string | null>(null)
 
@@ -438,7 +387,7 @@ export interface UseScrollResult {
   scroll: (request?: ScrollRequest) => ScrollResult
 }
 
-export function useScroll(shard: ShardWrapper | null): UseScrollResult {
+export function useScroll(shard: Shard | null): UseScrollResult {
   const [points, setPoints] = useState<RetrievedPoint[]>([])
   const [nextOffset, setNextOffset] = useState<string | undefined>()
   const [error, setError] = useState<string | null>(null)
@@ -470,15 +419,15 @@ export function useScroll(shard: ShardWrapper | null): UseScrollResult {
 export interface UseCountResult {
   count: number
   error: string | null
-  refresh: (filter?: Record<string, unknown>) => number
+  refresh: (filter?: Filter) => number
 }
 
-export function useCount(shard: ShardWrapper | null): UseCountResult {
+export function useCount(shard: Shard | null): UseCountResult {
   const [count, setCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(
-    (filter?: Record<string, unknown>) => {
+    (filter?: Filter) => {
       if (!shard) {
         setError('shard not open')
         return 0
@@ -503,38 +452,23 @@ export function useCount(shard: ShardWrapper | null): UseCountResult {
   return { count, error, refresh }
 }
 
-class Bm25Wrapper {
-  constructor(private readonly _raw: QdrantEdgeBm25) {}
-  embedQuery(text: string): SparseVector {
-    return JSON.parse(this._raw.embedQuery(text)) as SparseVector
-  }
-  embedDocument(text: string): SparseVector {
-    return JSON.parse(this._raw.embedDocument(text)) as SparseVector
-  }
-  close() {
-    this._raw.close()
-  }
-}
-
-function _createBm25(config?: Bm25Config): Bm25Wrapper {
-  return new Bm25Wrapper(
-    getFactory().createBm25(config ? JSON.stringify(config) : '')
-  )
+function _createBm25(config?: Bm25Config): Bm25 {
+  return new Bm25(getFactory().createBm25(config ? JSON.stringify(config) : ''))
 }
 
 export interface UseBm25Result {
-  bm25: Bm25Wrapper | null
+  bm25: Bm25 | null
   error: string | null
 }
 
 /**
  * Construct (and own the lifecycle of) a BM25 model. The model is disposed
- * on unmount; pass `null`/`undefined` to skip creation.
+ * on unmount; pass `null` to skip creation, omit the config for defaults.
  */
 export function useBm25(config?: Bm25Config | null): UseBm25Result {
-  const [bm25, setBm25] = useState<Bm25Wrapper | null>(null)
+  const [bm25, setBm25] = useState<Bm25 | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const ref = useRef<Bm25Wrapper | null>(null)
+  const ref = useRef<Bm25 | null>(null)
   const configKey = config ? JSON.stringify(config) : 'NONE'
 
   useEffect(() => {
@@ -589,15 +523,16 @@ export interface UseFacetResult {
  * `null` to skip the initial run.
  */
 export function useFacet(
-  shard: ShardWrapper | null,
+  shard: Shard | null,
   request: FacetRequest | null
 ): UseFacetResult {
+  const stableRequest = useStableValue(request)
   const [result, setResult] = useState<FacetResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const refresh = useCallback(
     (override?: FacetRequest) => {
-      const req = override ?? request
+      const req = override ?? stableRequest
       if (!shard || !req) return null
       try {
         setError(null)
@@ -609,12 +544,12 @@ export function useFacet(
         return null
       }
     },
-    [shard, request]
+    [shard, stableRequest]
   )
 
   useEffect(() => {
-    if (shard && request) refresh()
-  }, [shard, request, refresh])
+    if (shard && stableRequest) refresh()
+  }, [shard, stableRequest, refresh])
 
   return { result, error, refresh }
 }
@@ -627,7 +562,7 @@ export interface UseSnapshotManifestResult {
 
 /** Read (and re-read on demand) the shard's snapshot manifest. */
 export function useSnapshotManifest(
-  shard: ShardWrapper | null
+  shard: Shard | null
 ): UseSnapshotManifestResult {
   const [manifest, setManifest] = useState<SnapshotManifest | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -652,7 +587,7 @@ export function useSnapshotManifest(
   return { manifest, error, refresh }
 }
 
-export function useShardInfo(shard: ShardWrapper | null): UseShardInfoResult {
+export function useShardInfo(shard: Shard | null): UseShardInfoResult {
   const [info, setInfo] = useState<ShardInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
 
