@@ -74,13 +74,15 @@ export default function EmojiScreen() {
   const { dir, path } = useMemo(() => ensureDir('emoji-shard'), [])
 
   useEffect(() => {
+    let s: Shard | undefined
     try {
       if (dir.exists) { dir.delete(); dir.create() }
-      const s = createShard(path, { vectors: { '': { size: DIMS, distance: 'Cosine' } } })
+      s = createShard(path, { vectors: { '': { size: DIMS, distance: 'Cosine' } } })
       s.upsert(EMOJIS.map((e, i) => ({ id: i + 1, vector: e.vec, payload: { emoji: e.emoji, label: e.label } })))
       s.flush()
       setShard(s)
     } catch {}
+    return () => s?.close()
   }, [])
 
   const doSearch = useCallback((vec: number[], excludeIdx?: number) => {

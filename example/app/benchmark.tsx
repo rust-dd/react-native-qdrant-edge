@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { createShard } from 'react-native-qdrant-edge'
+import { createShard, type Shard } from 'react-native-qdrant-edge'
 
 const DIMS = 128
 
@@ -39,9 +39,10 @@ export default function BenchmarkScreen() {
   const run = useCallback((count: number) => {
     setRunning(true); setMetrics([]); setLog([])
     setTimeout(() => {
+      let shard: Shard | undefined
       try {
         if (dir.exists) { dir.delete(); dir.create() }
-        const shard = createShard(path, { vectors: { '': { size: DIMS, distance: 'Cosine' } } })
+        shard = createShard(path, { vectors: { '': { size: DIMS, distance: 'Cosine' } } })
 
         print(`Generating ${count} random ${DIMS}-dim points...`)
         const points = Array.from({ length: count }, (_, i) => ({
@@ -78,7 +79,6 @@ export default function BenchmarkScreen() {
         print(`Filtered: ${filtAvg}ms avg`)
 
         const info = shard.info()
-        shard.close()
 
         setMetrics([
           { label: 'Insert', value: rate, unit: 'pts/sec', accent: '#22c55e' },
@@ -88,7 +88,7 @@ export default function BenchmarkScreen() {
           { label: 'Points', value: String(info.points_count), unit: '', accent: '#71717a' },
           { label: 'HNSW', value: String(info.indexed_vectors_count), unit: 'indexed', accent: '#06b6d4' },
         ])
-      } catch (e: any) { print(`error: ${e.message}`) }
+      } catch (e: any) { print(`error: ${e.message}`) } finally { shard?.close() }
       setRunning(false)
     }, 50)
   }, [dir, path, print])
