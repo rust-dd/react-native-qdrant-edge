@@ -39,6 +39,8 @@ npm install react-native-qdrant-edge react-native-nitro-modules
 
 Prebuilt native binaries for iOS (arm64 + simulator) and Android (arm64 + x86_64) are included — no Rust toolchain required.
 
+32-bit Android ABIs (`armeabi-v7a`, `x86`) are not supported. The Expo plugin limits `reactNativeArchitectures` to `arm64-v8a,x86_64`; in a bare app, set it in `android/gradle.properties`, or release builds fail to link.
+
 ### Expo
 
 ```json
@@ -114,6 +116,8 @@ const shard = createShard(path, {
 
 **Distance metrics:** `Cosine` | `Euclid` | `Dot` | `Manhattan`
 
+The shard directory is created if missing. Fields left out of `hnsw_config` and `wal_options` take the upstream defaults.
+
 For a mobile-tuned WAL preset, see [`mobileWalDefaults()`](#mobile-wal-preset).
 
 ### `loadShard(path, config?)`
@@ -137,8 +141,8 @@ shard.upsert([
 
 shard.deletePoints([1, 2, 'a3f1-...-uuid'])
 
-// Point IDs are u64 numbers OR UUID strings
-shard.updateVectors  // (single-point updates use upsert)
+// Point IDs are u64 numbers OR UUID strings. Results return every ID as a
+// string ('1'), and those strings are accepted back wherever an ID goes.
 
 // Payload — single point convenience
 shard.setPayload(1, { tag: 'new' })
@@ -297,7 +301,10 @@ const { sample_ids, nearests } = shard.searchMatrix({
 ```ts
 const points = shard.retrieve([1, 2, 'uuid-…'], { withPayload: true, withVector: false })
 
-const { points, next_offset } = shard.scroll({ limit: 100, with_payload: true })
+let page = shard.scroll({ limit: 100, with_payload: true })
+while (page.next_offset) {
+  page = shard.scroll({ limit: 100, with_payload: true, offset: page.next_offset })
+}
 
 // Order by an indexed payload field (numeric / datetime index required).
 // next_offset is not returned when ordering by field.
@@ -335,10 +342,13 @@ import { unpackSnapshot, recoverPartialSnapshot } from 'react-native-qdrant-edge
 // Apply an external snapshot to an existing local shard
 unpackSnapshot('/downloads/snapshot.tar', '/tmp/snapshot-unpacked')
 
-const current  = shard.snapshotManifest()
-const incoming = JSON.parse(await fs.readTextFile('/tmp/snapshot-unpacked/manifest.json'))
+// { [segmentId]: contents of segments/<segmentId>/segment_manifest.json }
+const incoming = await readSegmentManifests('/tmp/snapshot-unpacked') // your fs code
 
-const merged = recoverPartialSnapshot(shard.path, current, '/tmp/snapshot-unpacked', incoming)
+const current = shard.snapshotManifest()
+shard.close() // recovery rewrites the shard's files, so release it first
+
+const merged = recoverPartialSnapshot(shardPath, current, '/tmp/snapshot-unpacked', incoming)
 ```
 
 ### Lifecycle
@@ -354,8 +364,8 @@ shard.close()       // flush + release
 ### Runtime config
 
 ```ts
-shard.setHnswConfig({ m: 32, ef_construct: 200 })
-shard.setVectorHnswConfig('bm25', { full_scan_threshold: 5000 })
+shard.setHnswConfig({ m: 32, ef_construct: 200 })            // omitted fields: upstream defaults
+shard.setVectorHnswConfig('title', { full_scan_threshold: 5000 }) // dense vectors only
 shard.setOptimizersConfig({ indexing_threshold: 10_000, prevent_unoptimized: true })
 
 shard.createVectorName('caption', { dense: { size: 768, distance: 'Cosine' } })
@@ -394,11 +404,12 @@ Filters follow the [Qdrant filter syntax](https://qdrant.tech/documentation/conc
 }
 ```
 
-Text matching supports full-text (`text`), any-token (`text_any`), phrase
-(`phrase`), and prefix (`prefix`) modes on `text`-indexed fields:
+Text matching supports full-text (`text`), any-token (`text_any`), and phrase
+(`phrase`) modes on `text`-indexed fields. `prefix` is a case-sensitive prefix
+match on keyword values:
 
 ```ts
-{ must: [{ key: 'title', match: { prefix: 'qdra' } }] }
+{ must: [{ key: 'sku', match: { prefix: 'QD-' } }] }
 ```
 
 Additional conditions: `{ has_id: [...] }`, `{ has_vector: 'name' }`,
@@ -411,13 +422,15 @@ for processing a shard in independent batches.
 Every Shard / Bm25 method that fails throws a JS `Error` with a message of the form `"<operation> failed: <cause>"`. For structured access:
 
 ```ts
-import { asQdrantError } from 'react-native-qdrant-edge'
+import { asQdrantError, QdrantError } from 'react-native-qdrant-edge'
 
 try {
   shard.upsert(points)
 } catch (err) {
   const qe = asQdrantError(err)
-  console.log(qe.operation, qe.cause)   // e.g. 'upsert', 'invalid JSON path: …'
+  if (qe instanceof QdrantError) {
+    console.log(qe.operation, qe.cause)   // e.g. 'upsert', 'invalid JSON path: …'
+  }
 }
 ```
 
@@ -453,6 +466,8 @@ function NotesScreen() {
 }
 ```
 
+With `create: true`, `open()` creates the shard on first launch and opens the existing one afterwards. Request and config objects are compared by value, so inline literals don't re-run the hooks; to re-run with an unchanged request (e.g. after an upsert), call the function the hook returns (`search()`, `query()`, `refresh()`, …). `useShard` returns the same `Shard` class as `createShard`, and every hook also accepts a `Shard` you created yourself.
+
 Hybrid search via `useQuery`:
 
 ```ts
@@ -478,6 +493,17 @@ Each shard is independent — separate storage, config, and indexes.
 const docs = createShard(`${dir}/docs`,   { vectors: { '': { size: 768, distance: 'Cosine' } } })
 const imgs = createShard(`${dir}/photos`, { vectors: { '': { size: 512, distance: 'Dot' } } })
 ```
+
+## Changes in 0.4.1
+
+Bug fixes, no API removals:
+
+- Numeric IDs returned as strings (`'1'`, `next_offset`) are accepted back by every call, so scroll pagination and ID round trips work.
+- A one-element `prefetch` array no longer loses its query.
+- A non-object `payload` throws instead of aborting the app, and an invalid `createVectorName` config is rejected before it can block later writes.
+- Partial `hnsw_config` / `wal_options` objects are completed with upstream defaults; `createShard` creates a missing directory.
+- Hooks: inline request objects no longer cause a render loop, `useShard({ create: true })` reopens an existing shard, and `open()` closes the previous handle first.
+- TS literals now match the wire format: `datatype` is `'float32' | 'float16' | 'uint8'` and `multivector_config.comparator` is `'max_sim'`. The old spellings never deserialized at runtime.
 
 ## Migration from 0.3.x
 
