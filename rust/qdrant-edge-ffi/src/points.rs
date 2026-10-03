@@ -2,13 +2,13 @@
 
 use std::os::raw::c_char;
 
+use qdrant_edge::UpdateOperation;
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{PointId, UpdateOperation};
 
 use crate::error::set_last_error;
 use crate::ffi_strings::cstr_to_str;
 use crate::handle::{QeShardHandle, with_shard};
-use crate::serde_types::PointInput;
+use crate::serde_types::{PointInput, parse_point_ids};
 
 /// Upsert points. `points_json` is a JSON array of `PointInput` objects.
 /// Returns 0 on success, -1 on error.
@@ -59,7 +59,7 @@ pub unsafe extern "C" fn qe_shard_delete_points(
     ids_json: *const c_char,
 ) -> i32 {
     let json_str = unsafe { cstr_to_str(ids_json) };
-    let ids: Vec<PointId> = match serde_json::from_str(json_str) {
+    let ids = match parse_point_ids(json_str) {
         Ok(i) => i,
         Err(e) => {
             set_last_error(format!("Failed to parse IDs: {e}"));

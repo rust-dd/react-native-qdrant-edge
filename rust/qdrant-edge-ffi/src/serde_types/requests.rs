@@ -16,7 +16,7 @@ pub(crate) struct SearchInput {
     pub(crate) vector: AnyVectorInput,
     #[serde(default)]
     pub(crate) using: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_filter")]
     pub(crate) filter: Option<Filter>,
     #[serde(default = "default_limit")]
     pub(crate) limit: usize,
@@ -63,15 +63,17 @@ impl SearchInput {
 #[derive(Deserialize)]
 #[serde(untagged)]
 pub(crate) enum PrefetchSpec {
-    One(Box<PrefetchInput>),
+    // Must come first: serde also reads a struct from a sequence, so `One`
+    // would swallow `[x]` as a prefetch whose nested `prefetch` field is `x`.
     Many(Vec<PrefetchInput>),
+    One(Box<PrefetchInput>),
 }
 
 impl PrefetchSpec {
     fn into_vec(self) -> Vec<PrefetchInput> {
         match self {
-            PrefetchSpec::One(p) => vec![*p],
             PrefetchSpec::Many(v) => v,
+            PrefetchSpec::One(p) => vec![*p],
         }
     }
 }
@@ -84,7 +86,7 @@ pub(crate) struct PrefetchInput {
     pub(crate) query: Option<QueryClauseInput>,
     #[serde(default)]
     pub(crate) using: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_filter")]
     pub(crate) filter: Option<Filter>,
     #[serde(default = "default_limit")]
     pub(crate) limit: usize,
@@ -171,7 +173,7 @@ pub(crate) struct MatrixInput {
     pub(crate) sample: usize,
     #[serde(default = "default_matrix_limit")]
     pub(crate) limit: usize,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_filter")]
     pub(crate) filter: Option<Filter>,
     #[serde(default)]
     pub(crate) using: Option<String>,
@@ -202,11 +204,11 @@ impl MatrixInput {
 /// `ScrollRequestInternal` had before `ScrollRequest` lost `Deserialize`.
 #[derive(Deserialize)]
 pub(crate) struct ScrollInput {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_point_id")]
     pub(crate) offset: Option<qdrant_edge::PointId>,
     #[serde(default)]
     pub(crate) limit: Option<usize>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_filter")]
     pub(crate) filter: Option<Filter>,
     #[serde(default)]
     pub(crate) with_payload: Option<qdrant_edge::WithPayloadInterface>,
@@ -238,7 +240,7 @@ pub(crate) struct FacetInput {
     pub(crate) key: qdrant_edge::JsonPath,
     #[serde(default = "default_limit")]
     pub(crate) limit: usize,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_filter")]
     pub(crate) filter: Option<Filter>,
     #[serde(default)]
     pub(crate) exact: bool,
@@ -269,7 +271,7 @@ pub(crate) struct QueryInput {
     pub(crate) query: Option<QueryClauseInput>,
     #[serde(default)]
     pub(crate) using: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "super::ids::opt_filter")]
     pub(crate) filter: Option<Filter>,
     #[serde(default = "default_limit")]
     pub(crate) limit: usize,

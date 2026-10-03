@@ -7,15 +7,16 @@
 
 use std::os::raw::c_char;
 
-use qdrant_edge::external::serde_json;
 use qdrant_edge::{
     DeletePayloadOp, Filter, PayloadOps, PointId, SetPayloadOp, UpdateOperation,
 };
 use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
 use crate::error::set_last_error;
 use crate::ffi_strings::cstr_to_str;
 use crate::handle::{QeShardHandle, with_shard};
+use crate::serde_types::parse_targeted;
 
 /// Set (merge) payload fields. `op_json`: `{ payload, points?, filter?, key? }`.
 #[unsafe(no_mangle)]
@@ -69,7 +70,7 @@ pub unsafe extern "C" fn qe_shard_clear_payload(
     target_json: *const c_char,
 ) -> i32 {
     let json_str = unsafe { cstr_to_str(target_json) };
-    let target: ClearTarget = match serde_json::from_str(json_str) {
+    let target: ClearTarget = match parse_targeted(json_str) {
         Ok(t) => t,
         Err(e) => {
             set_last_error(format!("Failed to parse clear_payload target: {e}"));
@@ -89,14 +90,14 @@ pub unsafe extern "C" fn qe_shard_clear_payload(
     result
 }
 
-fn apply<T: for<'de> Deserialize<'de>>(
+fn apply<T: DeserializeOwned>(
     handle: *mut QeShardHandle,
     op_json: *const c_char,
     op_name: &str,
     wrap: impl FnOnce(T) -> PayloadOps,
 ) -> i32 {
     let json_str = unsafe { cstr_to_str(op_json) };
-    let parsed: T = match serde_json::from_str(json_str) {
+    let parsed: T = match parse_targeted(json_str) {
         Ok(p) => p,
         Err(e) => {
             set_last_error(format!("Failed to parse {op_name}: {e}"));

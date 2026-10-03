@@ -8,20 +8,18 @@ use super::vectors::VectorInput;
 
 #[derive(Deserialize)]
 pub(crate) struct PointInput {
-    /// `PointId` deserializes from a number (u64) or a UUID string —
-    /// upstream `ExtendedPointId` is `#[serde(untagged)]` over the two.
+    #[serde(deserialize_with = "super::ids::point_id")]
     pub(crate) id: PointId,
     pub(crate) vector: VectorInput,
+    /// A map, not any JSON value: `PointStruct::new` panics on a non-object payload.
     #[serde(default)]
-    pub(crate) payload: Option<serde_json::Value>,
+    pub(crate) payload: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl PointInput {
     pub(crate) fn into_point_struct(self) -> Result<PointStruct, String> {
         let vectors = self.vector.into_vectors()?;
-        let payload = self
-            .payload
-            .unwrap_or(serde_json::Value::Object(Default::default()));
+        let payload = serde_json::Value::Object(self.payload.unwrap_or_default());
         Ok(PointStruct::new(self.id, vectors, payload))
     }
 }

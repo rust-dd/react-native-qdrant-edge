@@ -8,12 +8,12 @@ use std::os::raw::c_char;
 use std::ptr;
 
 use qdrant_edge::external::serde_json;
-use qdrant_edge::{CountRequest, Filter, PointId, RetrieveRequest};
+use qdrant_edge::{CountRequest, Filter, RetrieveRequest};
 
 use crate::error::set_last_error;
 use crate::ffi_strings::{cstr_to_str, string_to_c};
 use crate::handle::{QeShardHandle, with_shard};
-use crate::serde_types::{RecordOutput, ScrollInput, ScrollOutput};
+use crate::serde_types::{RecordOutput, ScrollInput, ScrollOutput, parse_filter, parse_point_ids};
 
 /// Retrieve specific points by IDs. Returns JSON, or `null` on error.
 #[unsafe(no_mangle)]
@@ -24,7 +24,7 @@ pub unsafe extern "C" fn qe_shard_retrieve(
     with_vector: bool,
 ) -> *mut c_char {
     let json_str = unsafe { cstr_to_str(ids_json) };
-    let point_ids: Vec<PointId> = match serde_json::from_str(json_str) {
+    let point_ids = match parse_point_ids(json_str) {
         Ok(i) => i,
         Err(e) => {
             set_last_error(format!("Failed to parse IDs: {e}"));
@@ -92,7 +92,7 @@ pub unsafe extern "C" fn qe_shard_count(
     let filter: Option<Filter> = if json_str.is_empty() {
         None
     } else {
-        match serde_json::from_str(json_str) {
+        match parse_filter(json_str) {
             Ok(f) => Some(f),
             Err(e) => {
                 set_last_error(format!("Failed to parse filter: {e}"));

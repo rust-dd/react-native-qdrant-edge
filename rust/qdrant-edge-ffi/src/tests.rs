@@ -15,8 +15,6 @@ struct TempShardDir(PathBuf);
 impl TempShardDir {
     fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("qe-ffi-test-{}", uuid::Uuid::new_v4()));
-        // `EdgeShard::new` creates `wal/` and `segments/` inside an existing
-        // directory but not the shard directory itself; the app layer owns that.
         std::fs::create_dir_all(&dir).unwrap();
         Self(dir)
     }
@@ -44,7 +42,7 @@ fn take_json(ptr: *mut c_char) -> Value {
 }
 
 fn last_error() -> String {
-    let ptr = unsafe { qe_last_error() };
+    let ptr = qe_last_error();
     if ptr.is_null() {
         return "<no error>".to_owned();
     }
@@ -313,6 +311,179 @@ fn retrieve_by_ids_preserves_order_and_payload() {
     assert_eq!(records[1]["id"], "1");
     assert_eq!(records[0]["payload"]["rank"], 3);
     assert!(records[0].get("vector").is_none());
+
+    unsafe { qe_shard_close(handle) };
+}
+
+
+#[test]
+fn stringified_point_ids_are_accepted_back() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+    upsert_fixture_points(handle);
+
+    let req = cstr(&json!({ "limit": 2 }).to_string());
+    let page = take_json(unsafe { qe_shard_scroll(handle, req.as_ptr()) });
+    assert_eq!(page["next_offset"], "3");
+    let req = cstr(&json!({ "limit": 2, "offset": page["next_offset"] }).to_string());
+    let page = take_json(unsafe { qe_shard_scroll(handle, req.as_ptr()) });
+    assert_eq!(page["points"][0]["id"], "3", "next_offset feeds back into scroll");
+
+    let ids = cstr(r#"["1"]"#);
+    let records = take_json(unsafe { qe_shard_retrieve(handle, ids.as_ptr(), true, false) });
+    assert_eq!(records[0]["id"], "1");
+
+    let op = cstr(&json!({ "payload": { "seen": true }, "points": ["1"] }).to_string());
+    let rc = unsafe { qe_shard_set_payload(handle, op.as_ptr()) };
+    assert_eq!(rc, 0, "set_payload: {}", last_error());
+
+    let filter = cstr(&json!({ "must_not": [{ "has_id": ["1", 2] }] }).to_string());
+    assert_eq!(unsafe { qe_shard_count(handle, filter.as_ptr()) }, 1, "{}", last_error());
+    let nested = json!({ "must": [{ "min_should": { "min_count": 1, "conditions": [{ "has_id": ["3"] }] } }] });
+    let filter = cstr(&nested.to_string());
+    assert_eq!(unsafe { qe_shard_count(handle, filter.as_ptr()) }, 1, "{}", last_error());
+
+    let req = cstr(
+        &json!({
+            "query": [1.0, 0.0, 0.0, 0.0],
+            "group_by": "category",
+            "filter": { "must": [{ "has_id": ["1"] }] },
+        })
+        .to_string(),
+    );
+    let groups = take_json(unsafe { qe_shard_query_groups(handle, req.as_ptr()) });
+    assert_eq!(groups[0]["hits"][0]["id"], "1");
+
+    let req = cstr(
+        &json!({
+            "prefetch": [{ "query": [1.0, 0.0, 0.0, 0.0], "filter": { "must": [{ "has_id": ["2"] }] } }],
+            "query": [0.0, 1.0, 0.0, 0.0],
+        })
+        .to_string(),
+    );
+    let hits = take_json(unsafe { qe_shard_query(handle, req.as_ptr()) });
+    assert_eq!(hits.as_array().unwrap().len(), 1);
+    assert_eq!(hits[0]["id"], "2");
+
+    let target = cstr(&json!({ "points": ["2"] }).to_string());
+    assert_eq!(unsafe { qe_shard_clear_payload(handle, target.as_ptr()) }, 0, "{}", last_error());
+    let ids = cstr(r#"["3"]"#);
+    assert_eq!(unsafe { qe_shard_delete_points(handle, ids.as_ptr()) }, 0, "{}", last_error());
+    let points = cstr(&json!([{ "id": "9", "vector": [0.0, 0.0, 1.0, 0.0], "payload": { "code": "42" } }]).to_string());
+    assert_eq!(unsafe { qe_shard_upsert(handle, points.as_ptr()) }, 0, "{}", last_error());
+
+    let ids = cstr("[9]");
+    let records = take_json(unsafe { qe_shard_retrieve(handle, ids.as_ptr(), true, false) });
+    assert_eq!(records[0]["id"], "9", "a numeric-string id is stored as a numeric id");
+    let filter = cstr(&json!({ "must": [{ "key": "code", "match": { "value": "42" } }] }).to_string());
+    assert_eq!(unsafe { qe_shard_count(handle, filter.as_ptr()) }, 1, "keyword match values stay strings");
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
+fn single_element_prefetch_array_keeps_its_query() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+    upsert_fixture_points(handle);
+
+    let req = cstr(
+        &json!({
+            "prefetch": [{ "query": [1.0, 0.0, 0.0, 0.0], "limit": 2 }],
+            "query": [0.0, 1.0, 0.0, 0.0],
+        })
+        .to_string(),
+    );
+    let hits = take_json(unsafe { qe_shard_query(handle, req.as_ptr()) });
+    let ids: Vec<_> = hits.as_array().unwrap().iter().map(|h| h["id"].clone()).collect();
+    assert_eq!(ids, vec![json!("3"), json!("1")], "rescores only the prefetched candidates");
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
+fn non_object_payload_is_rejected_without_aborting() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+
+    for payload in [json!([1, 2]), json!("text"), json!(7)] {
+        let points = cstr(&json!([{ "id": 1, "vector": [1.0, 0.0, 0.0, 0.0], "payload": payload }]).to_string());
+        assert_eq!(unsafe { qe_shard_upsert(handle, points.as_ptr()) }, -1);
+        assert!(last_error().contains("expected a map"));
+    }
+    upsert_fixture_points(handle);
+    assert_eq!(unsafe { qe_shard_count(handle, cstr("").as_ptr()) }, 3);
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
+fn invalid_vector_name_config_leaves_shard_writable() {
+    let dir = TempShardDir::new();
+    let handle = create_test_shard(&dir);
+
+    let bad = cstr(&json!({ "vector_name": "img", "config": { "dense": { "size": 0, "distance": "Cosine" } } }).to_string());
+    assert_eq!(unsafe { qe_shard_create_vector_name(handle, bad.as_ptr()) }, -1);
+    assert!(last_error().contains("size"));
+
+    let good = cstr(&json!({ "vector_name": "img", "config": { "dense": { "size": 3, "distance": "Dot" } } }).to_string());
+    let rc = unsafe { qe_shard_create_vector_name(handle, good.as_ptr()) };
+    assert_eq!(rc, 0, "create_vector_name: {}", last_error());
+    let points = cstr(&json!([{ "id": 1, "vector": { "": [1.0, 0.0, 0.0, 0.0], "img": [1.0, 2.0, 3.0] } }]).to_string());
+    assert_eq!(unsafe { qe_shard_upsert(handle, points.as_ptr()) }, 0, "upsert: {}", last_error());
+
+    let name = cstr("img");
+    assert_eq!(unsafe { qe_shard_delete_vector_name(handle, name.as_ptr()) }, 0, "{}", last_error());
+
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
+fn create_makes_missing_shard_directory() {
+    let dir = TempShardDir::new();
+    let nested = dir.0.join("a").join("b");
+    let path = cstr(nested.to_str().unwrap());
+    let config = cstr(&json!({ "vectors": { "": { "size": 4, "distance": "Cosine" } } }).to_string());
+    let handle = unsafe { qe_shard_create(path.as_ptr(), config.as_ptr()) };
+    assert!(!handle.is_null(), "create failed: {}", last_error());
+    unsafe { qe_shard_close(handle) };
+}
+
+#[test]
+fn partial_hnsw_and_wal_configs_take_upstream_defaults() {
+    let dir = TempShardDir::new();
+    let read_persisted = || -> Value {
+        serde_json::from_str(&std::fs::read_to_string(dir.0.join("edge_config.json")).unwrap()).unwrap()
+    };
+    let config = json!({
+        "vectors": { "": { "size": 4, "distance": "Cosine", "hnsw_config": { "m": 8 } } },
+        "hnsw_config": { "m": 32 },
+        "wal_options": { "segment_capacity": 4_194_304 },
+    });
+    let config = cstr(&config.to_string());
+    let handle = unsafe { qe_shard_create(dir.path_cstring().as_ptr(), config.as_ptr()) };
+    assert!(!handle.is_null(), "create failed: {}", last_error());
+
+    let persisted = read_persisted();
+    assert_eq!(persisted["hnsw_config"]["m"], 32);
+    assert_eq!(persisted["hnsw_config"]["full_scan_threshold"], 10_000);
+    assert_eq!(persisted["vectors"][""]["hnsw_config"]["m"], 8);
+    assert_eq!(persisted["vectors"][""]["hnsw_config"]["ef_construct"], 100);
+    assert_eq!(persisted["wal_options"]["segment_capacity"], 4_194_304);
+    assert_eq!(persisted["wal_options"]["retain_closed"], 1);
+
+    let partial = cstr(&json!({ "ef_construct": 200 }).to_string());
+    let rc = unsafe { qe_shard_set_hnsw_config(handle, partial.as_ptr()) };
+    assert_eq!(rc, 0, "set_hnsw_config: {}", last_error());
+    let name = cstr("");
+    let partial = cstr(&json!({ "full_scan_threshold": 5000 }).to_string());
+    let rc = unsafe { qe_shard_set_vector_hnsw_config(handle, name.as_ptr(), partial.as_ptr()) };
+    assert_eq!(rc, 0, "set_vector_hnsw_config: {}", last_error());
+
+    let persisted = read_persisted();
+    assert_eq!(persisted["hnsw_config"]["ef_construct"], 200);
+    assert_eq!(persisted["hnsw_config"]["m"], 16, "a setter replaces the config");
+    assert_eq!(persisted["vectors"][""]["hnsw_config"]["full_scan_threshold"], 5000);
 
     unsafe { qe_shard_close(handle) };
 }

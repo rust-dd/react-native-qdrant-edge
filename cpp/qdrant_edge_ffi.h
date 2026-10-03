@@ -46,7 +46,8 @@ char *qe_bm25_embed_query(struct QeBm25Handle *handle, const char *text);
 char *qe_bm25_embed_document(struct QeBm25Handle *handle, const char *text);
 
 /**
- * Set the global HNSW config and persist. Returns 0/-1.
+ * Set the global HNSW config and persist; omitted fields take upstream
+ * defaults. Returns 0/-1.
  */
 int32_t qe_shard_set_hnsw_config(struct QeShardHandle *handle, const char *config_json);
 
@@ -63,7 +64,7 @@ int32_t qe_shard_set_vector_hnsw_config(struct QeShardHandle *handle,
 int32_t qe_shard_set_optimizers_config(struct QeShardHandle *handle, const char *config_json);
 
 /**
- * Add a new named vector slot. `op_json` is the `CreateVectorName` inner shape
+ * Add a new named vector slot. `op_json` is the `CreateVectorName` shape
  * `{"vector_name": "...", "config": { "dense": { ... } | "sparse": { ... } }}`.
  * Returns 0/-1.
  */
@@ -115,8 +116,8 @@ char *qe_shard_query_groups(struct QeShardHandle *handle, const char *request_js
 char *qe_shard_info(struct QeShardHandle *handle);
 
 /**
- * Create a new shard. `config_json` is a JSON-serialized `EdgeConfig`.
- * Returns an opaque handle, or null on error (check `qe_last_error`).
+ * Create a new shard, creating its directory if missing. `config_json` is a
+ * JSON `EdgeConfig`. Returns an opaque handle, or null on error (check `qe_last_error`).
  */
 struct QeShardHandle *qe_shard_create(const char *path, const char *config_json);
 

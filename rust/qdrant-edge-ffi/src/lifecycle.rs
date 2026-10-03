@@ -4,15 +4,15 @@ use std::os::raw::c_char;
 use std::path::Path;
 
 use parking_lot::Mutex;
-use qdrant_edge::external::serde_json;
-use qdrant_edge::{EdgeConfig, EdgeShard};
+use qdrant_edge::EdgeShard;
 
 use crate::error::set_last_error;
 use crate::ffi_strings::cstr_to_str;
 use crate::handle::{QeShardHandle, with_shard};
+use crate::serde_types::parse_edge_config;
 
-/// Create a new shard. `config_json` is a JSON-serialized `EdgeConfig`.
-/// Returns an opaque handle, or null on error (check `qe_last_error`).
+/// Create a new shard, creating its directory if missing. `config_json` is a
+/// JSON `EdgeConfig`. Returns an opaque handle, or null on error (check `qe_last_error`).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn qe_shard_create(
     path: *const c_char,
@@ -21,13 +21,19 @@ pub unsafe extern "C" fn qe_shard_create(
     let path_str = unsafe { cstr_to_str(path) };
     let config_str = unsafe { cstr_to_str(config_json) };
 
-    let config: EdgeConfig = match serde_json::from_str(config_str) {
+    let config = match parse_edge_config(config_str) {
         Ok(c) => c,
         Err(e) => {
             set_last_error(format!("Failed to parse config: {e}"));
             return std::ptr::null_mut();
         }
     };
+
+    // `EdgeShard::new` creates `wal/` and `segments/` but not the shard directory.
+    if let Err(e) = std::fs::create_dir_all(path_str) {
+        set_last_error(format!("Failed to create shard directory: {e}"));
+        return std::ptr::null_mut();
+    }
 
     match EdgeShard::new(Path::new(path_str), config) {
         Ok(shard) => Box::into_raw(Box::new(QeShardHandle {
@@ -49,10 +55,10 @@ pub unsafe extern "C" fn qe_shard_load(
     let path_str = unsafe { cstr_to_str(path) };
     let config_str = unsafe { cstr_to_str(config_json) };
 
-    let config: Option<EdgeConfig> = if config_str.is_empty() {
+    let config = if config_str.is_empty() {
         None
     } else {
-        match serde_json::from_str(config_str) {
+        match parse_edge_config(config_str) {
             Ok(c) => Some(c),
             Err(e) => {
                 set_last_error(format!("Failed to parse config: {e}"));
